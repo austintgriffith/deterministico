@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DeterministicDice } from "deterministic-dice";
@@ -14,7 +14,7 @@ const GRID_SIZE = 10; // 10x10 grid
 const TILE_WIDTH = 140; // approximate tile width for centering
 const TILE_HEIGHT = 80; // approximate tile height
 
-const Home: NextPage = () => {
+const HomeContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roll = searchParams.get("roll");
@@ -102,6 +102,20 @@ const Home: NextPage = () => {
         </button>
       )}
     </div>
+  );
+};
+
+const Home: NextPage = () => {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black flex items-center justify-center">
+          <div className="text-white">Loading...</div>
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 };
 
