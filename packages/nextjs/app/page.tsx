@@ -52,6 +52,15 @@ const HomeContent = () => {
   const needsRedrawRef = useRef(true);
   const animationFrameRef = useRef<number>(0);
 
+  // Zoom state
+  const zoomRef = useRef(1);
+  const MIN_ZOOM = 0.25;
+  const MAX_ZOOM = 3;
+
+  // Pinch gesture tracking
+  const pinchStartRef = useRef({ distance: 0, zoom: 1, centerX: 0, centerY: 0 });
+  const [isPinching, setIsPinching] = useState(false);
+
   // Calculate map dimensions
   const mapWidth = GRID_SIZE * 2 * TILE_X_SPACING + TILE_WIDTH;
   const mapHeight = GRID_SIZE * 2 * TILE_Y_SPACING + TILE_HEIGHT;
@@ -128,6 +137,9 @@ const HomeContent = () => {
     canvas.width = container.clientWidth;
     canvas.height = container.clientHeight;
 
+    // Reset zoom on new roll
+    zoomRef.current = 1;
+
     // Then center camera on the map
     cameraRef.current = {
       x: mapWidth / 2 - canvas.width / 2,
@@ -178,6 +190,7 @@ const HomeContent = () => {
     if (!canvas || !ctx || !cache.loaded || grid.length === 0) return;
 
     const camera = cameraRef.current;
+    const zoom = zoomRef.current;
     const viewportWidth = canvas.width;
     const viewportHeight = canvas.height;
 
@@ -185,12 +198,22 @@ const HomeContent = () => {
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, viewportWidth, viewportHeight);
 
+    // Save context state before transformations
+    ctx.save();
+
+    // Apply zoom transformation
+    ctx.scale(zoom, zoom);
+
     // Enable pixelated rendering
     ctx.imageSmoothingEnabled = false;
 
-    // Calculate visible tile range with buffer
+    // Calculate visible tile range with buffer (adjust for zoom)
     // For isometric, we need to be more generous with the buffer
-    const buffer = 200;
+    const buffer = 200 / zoom;
+
+    // Visible viewport in world coordinates
+    const visibleWidth = viewportWidth / zoom;
+    const visibleHeight = viewportHeight / zoom;
 
     // Get tile aspect height from first loaded tile (all tiles should be same size)
     const sampleTile = cache.tiles[1];
@@ -208,16 +231,16 @@ const HomeContent = () => {
         const worldX = centerX + (colIndex - rowIndex) * TILE_X_SPACING;
         const worldY = startY + (colIndex + rowIndex) * TILE_Y_SPACING;
 
-        // Calculate screen position
+        // Calculate screen position (in world space, since we applied scale)
         const screenX = worldX - camera.x;
         const screenY = worldY - camera.y;
 
         // Viewport culling - skip tiles outside visible area
         if (
           screenX + TILE_WIDTH < -buffer ||
-          screenX > viewportWidth + buffer ||
+          screenX > visibleWidth + buffer ||
           screenY + tileAspectHeight < -buffer ||
-          screenY > viewportHeight + buffer
+          screenY > visibleHeight + buffer
         ) {
           continue;
         }
@@ -236,14 +259,17 @@ const HomeContent = () => {
       const screenX = agent.x - 32 - camera.x;
       const screenY = agent.y - 60 - camera.y;
 
-      // Only draw if visible
-      if (screenX + 64 > 0 && screenX < viewportWidth && screenY + 64 > 0 && screenY < viewportHeight) {
+      // Only draw if visible (using world coordinates since we're scaled)
+      if (screenX + 64 > 0 && screenX < visibleWidth && screenY + 64 > 0 && screenY < visibleHeight) {
         const drillImg = cache.drills[agent.direction];
         if (drillImg) {
           ctx.drawImage(drillImg, screenX, screenY, 64, 64);
         }
       }
     });
+
+    // Restore context state
+    ctx.restore();
   }, [grid, agents, centerX, startY]);
 
   // Animation loop
@@ -300,8 +326,10 @@ const HomeContent = () => {
       if (!isDragging) return;
       const dx = clientX - dragStartRef.current.x;
       const dy = clientY - dragStartRef.current.y;
-      cameraRef.current.x = dragStartRef.current.cameraX - dx;
-      cameraRef.current.y = dragStartRef.current.cameraY - dy;
+      // Adjust drag by zoom so panning feels natural at any zoom level
+      const zoom = zoomRef.current;
+      cameraRef.current.x = dragStartRef.current.cameraX - dx / zoom;
+      cameraRef.current.y = dragStartRef.current.cameraY - dy / zoom;
       needsRedrawRef.current = true;
     },
     [isDragging],
@@ -332,29 +360,125 @@ const HomeContent = () => {
     handleDragEnd();
   }, [handleDragEnd]);
 
+  // Helper to calculate distance between two touch points
+  const getTouchDistance = useCallback((touches: React.TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }, []);
+
+  // Helper to get center point between two touches
+  const getTouchCenter = useCallback((touches: React.TouchList) => {
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+  }, []);
+
   // Touch event handlers
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
       if ((e.target as HTMLElement).closest("button")) return;
-      const touch = e.touches[0];
-      handleDragStart(touch.clientX, touch.clientY);
+
+      if (e.touches.length === 2) {
+        // Start pinch gesture
+        setIsPinching(true);
+        setIsDragging(false);
+        const distance = getTouchDistance(e.touches);
+        const center = getTouchCenter(e.touches);
+        pinchStartRef.current = {
+          distance,
+          zoom: zoomRef.current,
+          centerX: center.x,
+          centerY: center.y,
+        };
+      } else if (e.touches.length === 1 && !isPinching) {
+        // Single touch - start drag
+        const touch = e.touches[0];
+        handleDragStart(touch.clientX, touch.clientY);
+      }
     },
-    [handleDragStart],
+    [handleDragStart, getTouchDistance, getTouchCenter, isPinching],
   );
 
   const handleTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      if (!isDragging) return;
       e.preventDefault();
-      const touch = e.touches[0];
-      handleDragMove(touch.clientX, touch.clientY);
+
+      if (e.touches.length === 2) {
+        // Pinch zoom
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const currentDistance = getTouchDistance(e.touches);
+        const currentCenter = getTouchCenter(e.touches);
+        const scale = currentDistance / pinchStartRef.current.distance;
+        const oldZoom = pinchStartRef.current.zoom;
+        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldZoom * scale));
+
+        // Get pinch center relative to canvas
+        const rect = canvas.getBoundingClientRect();
+        const pinchX = currentCenter.x - rect.left;
+        const pinchY = currentCenter.y - rect.top;
+
+        // Calculate world position under pinch center before zoom change
+        const worldX = cameraRef.current.x + pinchX / zoomRef.current;
+        const worldY = cameraRef.current.y + pinchY / zoomRef.current;
+
+        // Update zoom
+        zoomRef.current = newZoom;
+
+        // Adjust camera so the same world position stays under pinch center
+        cameraRef.current.x = worldX - pinchX / newZoom;
+        cameraRef.current.y = worldY - pinchY / newZoom;
+
+        needsRedrawRef.current = true;
+      } else if (e.touches.length === 1 && isDragging && !isPinching) {
+        // Single touch drag
+        const touch = e.touches[0];
+        handleDragMove(touch.clientX, touch.clientY);
+      }
     },
-    [handleDragMove, isDragging],
+    [getTouchDistance, getTouchCenter, handleDragMove, isDragging, isPinching],
   );
 
   const handleTouchEnd = useCallback(() => {
     handleDragEnd();
+    setIsPinching(false);
   }, [handleDragEnd]);
+
+  // Mouse wheel zoom handler
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const zoomSensitivity = 0.001;
+    const delta = -e.deltaY * zoomSensitivity;
+    const oldZoom = zoomRef.current;
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldZoom * (1 + delta)));
+
+    if (newZoom === oldZoom) return;
+
+    // Get mouse position relative to canvas
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Calculate world position under mouse before zoom
+    const worldX = cameraRef.current.x + mouseX / oldZoom;
+    const worldY = cameraRef.current.y + mouseY / oldZoom;
+
+    // Update zoom
+    zoomRef.current = newZoom;
+
+    // Adjust camera so the same world position stays under mouse
+    cameraRef.current.x = worldX - mouseX / newZoom;
+    cameraRef.current.y = worldY - mouseY / newZoom;
+
+    needsRedrawRef.current = true;
+  }, []);
 
   const handleRoll = () => {
     const randomNumber = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
@@ -377,6 +501,7 @@ const HomeContent = () => {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onWheel={handleWheel}
       style={{ touchAction: "none" }}
     >
       {roll && (
