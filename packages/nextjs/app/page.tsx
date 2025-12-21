@@ -5,71 +5,49 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DeterministicDice } from "deterministic-dice";
 import type { NextPage } from "next";
 import { keccak256, toHex } from "viem";
+import { GameRenderer } from "~~/components/GameRenderer";
 import {
-  Agent,
-  DIRECTIONS,
+  AgentPool,
   GRID_SIZE,
+  MAX_AGENTS,
   MAX_ROUNDS,
   ROUND_DELAY,
-  TILE_HEIGHT,
   TILE_WIDTH,
   TILE_X_SPACING,
   TILE_Y_SPACING,
   generateGrid,
-  processAgentAction,
 } from "~~/lib/game";
 
-// Image cache for canvas rendering
-type ImageCache = {
-  tiles: HTMLImageElement[];
-  drills: Record<string, HTMLImageElement>;
-  loaded: boolean;
-};
+/**
+ * Performance Configuration
+ *
+ * USE_WORKER: Enable Web Worker for off-main-thread simulation.
+ * Set to true for maximum performance with 1000+ agents.
+ * The worker keeps simulation computation off the main thread,
+ * allowing the renderer to maintain smooth 60fps.
+ *
+ * To enable: set USE_WORKER = true and import useSimulationWorker hook.
+ * See workers/simulation.worker.ts and hooks/useSimulationWorker.ts
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const USE_WORKER = false;
 
 const HomeContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const roll = searchParams.get("roll");
 
-  // Canvas ref
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Image cache
-  const imageCacheRef = useRef<ImageCache>({ tiles: [], drills: {}, loaded: false });
-  const [imagesLoaded, setImagesLoaded] = useState(false);
-
-  // Agent state
-  const [agents, setAgents] = useState<Agent[]>([]);
+  // Agent pool (high-performance TypedArray-based storage)
+  const agentPoolRef = useRef<AgentPool>(new AgentPool(MAX_AGENTS));
   const [round, setRound] = useState(0);
+  const [rendererReady, setRendererReady] = useState(false);
 
-  // Ref for agents to avoid stale closure in draw
-  const agentsRef = useRef<Agent[]>([]);
-  agentsRef.current = agents; // Sync on every render
+  // Force re-render counter for UI updates
+  const [, forceUpdate] = useState(0);
 
-  // Camera state (viewport offset)
-  const cameraRef = useRef({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0, cameraX: 0, cameraY: 0 });
-
-  // Track if we need to redraw
-  const needsRedrawRef = useRef(true);
-  const animationFrameRef = useRef<number>(0);
-
-  // Zoom state
-  const zoomRef = useRef(1);
-  const MIN_ZOOM = 0.25;
-  const MAX_ZOOM = 3;
-
-  // Pinch gesture tracking
-  const pinchStartRef = useRef({ distance: 0, zoom: 1, centerX: 0, centerY: 0 });
-  const [isPinching, setIsPinching] = useState(false);
-
-  // Calculate map dimensions
+  // Calculate map dimensions for agent spawn position
   const mapWidth = GRID_SIZE * 2 * TILE_X_SPACING + TILE_WIDTH;
-  const mapHeight = GRID_SIZE * 2 * TILE_Y_SPACING + TILE_HEIGHT;
-  const centerX = mapWidth / 2 - TILE_WIDTH / 2;
-  const startY = 0;
+  const mapHeight = GRID_SIZE * 2 * TILE_Y_SPACING + 80; // TILE_HEIGHT
 
   // Generate grid
   const grid = useMemo(() => {
@@ -77,414 +55,54 @@ const HomeContent = () => {
     return generateGrid(roll as `0x${string}`, GRID_SIZE);
   }, [roll]);
 
-  // Preload images on mount
+  // Initialize agent pool when roll changes
   useEffect(() => {
-    const cache = imageCacheRef.current;
-    if (cache.loaded) return;
+    const pool = agentPoolRef.current;
+    pool.reset();
 
-    let loadedCount = 0;
-    const totalImages = 6 + 4; // 6 tiles + 4 drill directions
-
-    const onLoad = () => {
-      loadedCount++;
-      if (loadedCount === totalImages) {
-        cache.loaded = true;
-        setImagesLoaded(true);
-        needsRedrawRef.current = true;
-      }
-    };
-
-    // Load tile images (1-6)
-    for (let i = 1; i <= 6; i++) {
-      const img = new window.Image();
-      img.onload = onLoad;
-      img.src = `/surface/surface_normal_${i}.png`;
-      cache.tiles[i] = img;
-    }
-
-    // Load drill images
-    const directions = ["north", "east", "south", "west"];
-    directions.forEach(dir => {
-      const img = new window.Image();
-      img.onload = onLoad;
-      img.src = `/vehicles/drill_${dir}.png`;
-      cache.drills[dir] = img;
-    });
-  }, []);
-
-  // Initialize agents when roll changes
-  useEffect(() => {
     if (!roll) {
-      setAgents([]);
       setRound(0);
+      setRendererReady(false);
       return;
     }
+
     const initDice = new DeterministicDice(keccak256(toHex(roll + "agent-init")));
-    const randomDirection = DIRECTIONS[initDice.roll(4) % 4];
+    const randomDirection = initDice.roll(4) % 4; // 0=north, 1=east, 2=south, 3=west
 
     const agentStartX = mapWidth / 2;
     const agentStartY = mapHeight / 2;
 
-    setAgents([{ x: agentStartX, y: agentStartY, direction: randomDirection }]);
+    pool.add(agentStartX, agentStartY, randomDirection);
     setRound(0);
-    needsRedrawRef.current = true;
   }, [roll, mapWidth, mapHeight]);
 
-  // Center camera when roll changes - must wait for images to be loaded so canvas is in DOM
+  // Game loop - uses AgentPool.updateAll() for zero-allocation updates
   useEffect(() => {
-    if (!roll || !imagesLoaded || !containerRef.current || !canvasRef.current) return;
+    if (!roll || !rendererReady || round >= MAX_ROUNDS) return;
 
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-
-    // Size the canvas first
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-
-    // Reset zoom on new roll
-    zoomRef.current = 1;
-
-    // Then center camera on the map
-    cameraRef.current = {
-      x: mapWidth / 2 - canvas.width / 2,
-      y: mapHeight / 2 - canvas.height / 2,
-    };
-    needsRedrawRef.current = true;
-  }, [roll, imagesLoaded, mapWidth, mapHeight]);
-
-  // Game loop
-  useEffect(() => {
-    if (!roll || agents.length === 0 || round >= MAX_ROUNDS) return;
+    const pool = agentPoolRef.current;
+    if (pool.count === 0) return;
 
     const timer = setTimeout(() => {
       const gameDice = new DeterministicDice(keccak256(toHex(roll + "round" + round)));
 
-      setAgents(prevAgents => {
-        const updatedAgents = prevAgents.map(agent => {
-          const action = gameDice.roll(16);
-          return processAgentAction(agent, action);
-        });
+      // Update all agents in place (zero allocations)
+      pool.updateAll(gameDice);
 
-        const nextRound = round + 1;
-        if (nextRound % 5 === 0 && nextRound < MAX_ROUNDS) {
-          const spawnDice = new DeterministicDice(keccak256(toHex(roll + "spawn" + round)));
-          const randomDirection = DIRECTIONS[spawnDice.roll(4) % 4];
-          updatedAgents.push({
-            x: mapWidth / 2,
-            y: mapHeight / 2,
-            direction: randomDirection,
-          });
-        }
+      // Spawn new agent every 5 rounds
+      const nextRound = round + 1;
+      if (nextRound % 5 === 0 && nextRound < MAX_ROUNDS && pool.count < MAX_AGENTS) {
+        const spawnDice = new DeterministicDice(keccak256(toHex(roll + "spawn" + round)));
+        const randomDirection = spawnDice.roll(4) % 4;
+        pool.add(mapWidth / 2, mapHeight / 2, randomDirection);
+      }
 
-        return updatedAgents;
-      });
-      setRound(r => r + 1);
-      needsRedrawRef.current = true;
+      setRound(nextRound);
+      forceUpdate(n => n + 1); // Trigger re-render for UI count update
     }, ROUND_DELAY);
 
     return () => clearTimeout(timer);
-  }, [roll, round, agents.length, mapWidth, mapHeight]);
-
-  // Canvas draw function with viewport culling
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    const cache = imageCacheRef.current;
-
-    if (!canvas || !ctx || !cache.loaded || grid.length === 0) return;
-
-    const camera = cameraRef.current;
-    const zoom = zoomRef.current;
-    const viewportWidth = canvas.width;
-    const viewportHeight = canvas.height;
-
-    // Clear canvas
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, viewportWidth, viewportHeight);
-
-    // Save context state before transformations
-    ctx.save();
-
-    // Apply zoom transformation
-    ctx.scale(zoom, zoom);
-
-    // Enable pixelated rendering
-    ctx.imageSmoothingEnabled = false;
-
-    // Calculate visible tile range with buffer (adjust for zoom)
-    // For isometric, we need to be more generous with the buffer
-    const buffer = 200 / zoom;
-
-    // Visible viewport in world coordinates
-    const visibleWidth = viewportWidth / zoom;
-    const visibleHeight = viewportHeight / zoom;
-
-    // Get tile aspect height from first loaded tile (all tiles should be same size)
-    const sampleTile = cache.tiles[1];
-    const tileAspectHeight = sampleTile
-      ? sampleTile.naturalHeight * (TILE_WIDTH / sampleTile.naturalWidth)
-      : TILE_HEIGHT;
-
-    // Iterate through grid and only draw visible tiles
-    for (let rowIndex = 0; rowIndex < grid.length; rowIndex++) {
-      const row = grid[rowIndex];
-      for (let colIndex = 0; colIndex < row.length; colIndex++) {
-        const tileType = row[colIndex];
-
-        // Calculate tile position in world space
-        const worldX = centerX + (colIndex - rowIndex) * TILE_X_SPACING;
-        const worldY = startY + (colIndex + rowIndex) * TILE_Y_SPACING;
-
-        // Calculate screen position (in world space, since we applied scale)
-        const screenX = worldX - camera.x;
-        const screenY = worldY - camera.y;
-
-        // Viewport culling - skip tiles outside visible area
-        if (
-          screenX + TILE_WIDTH < -buffer ||
-          screenX > visibleWidth + buffer ||
-          screenY + tileAspectHeight < -buffer ||
-          screenY > visibleHeight + buffer
-        ) {
-          continue;
-        }
-
-        // Draw tile at natural aspect ratio (width fixed, height calculated)
-        const tileImg = cache.tiles[tileType];
-        if (tileImg) {
-          ctx.drawImage(tileImg, screenX, screenY, TILE_WIDTH, tileAspectHeight);
-        }
-      }
-    }
-
-    // Draw agents sorted by Y position for proper layering
-    // Read from ref to always get latest agents (avoids stale closure)
-    const currentAgents = agentsRef.current;
-    const sortedAgents = [...currentAgents].sort((a, b) => a.y - b.y);
-    sortedAgents.forEach(agent => {
-      const screenX = agent.x - 32 - camera.x;
-      const screenY = agent.y - 60 - camera.y;
-
-      // Only draw if visible (using world coordinates since we're scaled)
-      if (screenX + 64 > 0 && screenX < visibleWidth && screenY + 64 > 0 && screenY < visibleHeight) {
-        const drillImg = cache.drills[agent.direction];
-        if (drillImg) {
-          ctx.drawImage(drillImg, screenX, screenY, 64, 64);
-        }
-      }
-    });
-
-    // Restore context state
-    ctx.restore();
-  }, [grid, centerX, startY]); // agents removed - read from ref instead
-
-  // Animation loop
-  useEffect(() => {
-    const animate = () => {
-      if (needsRedrawRef.current) {
-        draw();
-        needsRedrawRef.current = false;
-      }
-      animationFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    animationFrameRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [draw]);
-
-  // Resize canvas to match container - must wait for images so canvas is in DOM
-  useEffect(() => {
-    if (!imagesLoaded) return;
-
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (!canvas || !container) return;
-
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
-      needsRedrawRef.current = true;
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [imagesLoaded]);
-
-  // Drag handlers - update camera position directly
-  const handleDragStart = useCallback((clientX: number, clientY: number) => {
-    setIsDragging(true);
-    dragStartRef.current = {
-      x: clientX,
-      y: clientY,
-      cameraX: cameraRef.current.x,
-      cameraY: cameraRef.current.y,
-    };
-  }, []);
-
-  const handleDragMove = useCallback(
-    (clientX: number, clientY: number) => {
-      if (!isDragging) return;
-      const dx = clientX - dragStartRef.current.x;
-      const dy = clientY - dragStartRef.current.y;
-      // Adjust drag by zoom so panning feels natural at any zoom level
-      const zoom = zoomRef.current;
-      cameraRef.current.x = dragStartRef.current.cameraX - dx / zoom;
-      cameraRef.current.y = dragStartRef.current.cameraY - dy / zoom;
-      needsRedrawRef.current = true;
-    },
-    [isDragging],
-  );
-
-  const handleDragEnd = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Mouse event handlers
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if ((e.target as HTMLElement).closest("button")) return;
-      e.preventDefault();
-      handleDragStart(e.clientX, e.clientY);
-    },
-    [handleDragStart],
-  );
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      handleDragMove(e.clientX, e.clientY);
-    },
-    [handleDragMove],
-  );
-
-  const handleMouseUp = useCallback(() => {
-    handleDragEnd();
-  }, [handleDragEnd]);
-
-  // Helper to calculate distance between two touch points
-  const getTouchDistance = useCallback((touches: React.TouchList) => {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  }, []);
-
-  // Helper to get center point between two touches
-  const getTouchCenter = useCallback((touches: React.TouchList) => {
-    return {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
-  }, []);
-
-  // Touch event handlers
-  const handleTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      if ((e.target as HTMLElement).closest("button")) return;
-
-      if (e.touches.length === 2) {
-        // Start pinch gesture
-        setIsPinching(true);
-        setIsDragging(false);
-        const distance = getTouchDistance(e.touches);
-        const center = getTouchCenter(e.touches);
-        pinchStartRef.current = {
-          distance,
-          zoom: zoomRef.current,
-          centerX: center.x,
-          centerY: center.y,
-        };
-      } else if (e.touches.length === 1 && !isPinching) {
-        // Single touch - start drag
-        const touch = e.touches[0];
-        handleDragStart(touch.clientX, touch.clientY);
-      }
-    },
-    [handleDragStart, getTouchDistance, getTouchCenter, isPinching],
-  );
-
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      e.preventDefault();
-
-      if (e.touches.length === 2) {
-        // Pinch zoom
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const currentDistance = getTouchDistance(e.touches);
-        const currentCenter = getTouchCenter(e.touches);
-        const scale = currentDistance / pinchStartRef.current.distance;
-        const oldZoom = pinchStartRef.current.zoom;
-        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldZoom * scale));
-
-        // Get pinch center relative to canvas
-        const rect = canvas.getBoundingClientRect();
-        const pinchX = currentCenter.x - rect.left;
-        const pinchY = currentCenter.y - rect.top;
-
-        // Calculate world position under pinch center before zoom change
-        const worldX = cameraRef.current.x + pinchX / zoomRef.current;
-        const worldY = cameraRef.current.y + pinchY / zoomRef.current;
-
-        // Update zoom
-        zoomRef.current = newZoom;
-
-        // Adjust camera so the same world position stays under pinch center
-        cameraRef.current.x = worldX - pinchX / newZoom;
-        cameraRef.current.y = worldY - pinchY / newZoom;
-
-        needsRedrawRef.current = true;
-      } else if (e.touches.length === 1 && isDragging && !isPinching) {
-        // Single touch drag
-        const touch = e.touches[0];
-        handleDragMove(touch.clientX, touch.clientY);
-      }
-    },
-    [getTouchDistance, getTouchCenter, handleDragMove, isDragging, isPinching],
-  );
-
-  const handleTouchEnd = useCallback(() => {
-    handleDragEnd();
-    setIsPinching(false);
-  }, [handleDragEnd]);
-
-  // Mouse wheel zoom handler
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const zoomSensitivity = 0.001;
-    const delta = -e.deltaY * zoomSensitivity;
-    const oldZoom = zoomRef.current;
-    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldZoom * (1 + delta)));
-
-    if (newZoom === oldZoom) return;
-
-    // Get mouse position relative to canvas
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    // Calculate world position under mouse before zoom
-    const worldX = cameraRef.current.x + mouseX / oldZoom;
-    const worldY = cameraRef.current.y + mouseY / oldZoom;
-
-    // Update zoom
-    zoomRef.current = newZoom;
-
-    // Adjust camera so the same world position stays under mouse
-    cameraRef.current.x = worldX - mouseX / newZoom;
-    cameraRef.current.y = worldY - mouseY / newZoom;
-
-    needsRedrawRef.current = true;
-  }, []);
+  }, [roll, round, rendererReady, mapWidth, mapHeight]);
 
   const handleRoll = () => {
     const randomNumber = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
@@ -496,26 +114,19 @@ const HomeContent = () => {
     router.push("/");
   };
 
+  const handleRendererReady = useCallback(() => {
+    setRendererReady(true);
+  }, []);
+
   return (
-    <div
-      ref={containerRef}
-      className={`h-screen w-screen bg-black overflow-hidden ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onWheel={handleWheel}
-      style={{ touchAction: "none" }}
-    >
+    <div className="h-screen w-screen bg-black overflow-hidden">
       {roll && (
         <div className="fixed top-6 left-6 font-mono text-white text-sm opacity-70 z-50">
-          <div>{roll}</div>
+          <div className="truncate max-w-[200px]">{roll}</div>
           <div className="mt-2">
             Round: {round} / {MAX_ROUNDS}
           </div>
+          <div className="mt-1">Agents: {agentPoolRef.current.count}</div>
         </div>
       )}
 
@@ -536,9 +147,11 @@ const HomeContent = () => {
         </div>
       )}
 
-      {roll && imagesLoaded && <canvas ref={canvasRef} className="block w-full h-full" />}
+      {roll && grid.length > 0 && (
+        <GameRenderer grid={grid} agentPool={agentPoolRef.current} onReady={handleRendererReady} />
+      )}
 
-      {roll && !imagesLoaded && (
+      {roll && grid.length === 0 && (
         <div className="flex items-center justify-center h-full w-full">
           <div className="text-white">Loading...</div>
         </div>

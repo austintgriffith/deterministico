@@ -35,6 +35,12 @@ export const TURN_RIGHT: Record<Direction, Direction> = {
 };
 
 // Game settings
-export const MOVE_AMOUNT = 4; // pixels per move
+export const MOVE_AMOUNT = 5; // pixels per move
 export const MAX_ROUNDS = 100;
-export const ROUND_DELAY = 1000; // 1 second
+export const ROUND_DELAY = 5;
+export const MAX_AGENTS = 2000; // Maximum agents for pool allocation
+
+// Fast indexed direction vectors for TypedArray-based simulation
+// Index: 0=north, 1=east, 2=south, 3=west
+export const DIRECTION_DX = new Float32Array([2, 2, -2, -2]);
+export const DIRECTION_DY = new Float32Array([-1, 1, 1, -1]);
