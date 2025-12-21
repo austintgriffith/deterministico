@@ -43,6 +43,10 @@ const HomeContent = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [round, setRound] = useState(0);
 
+  // Ref for agents to avoid stale closure in draw
+  const agentsRef = useRef<Agent[]>([]);
+  agentsRef.current = agents; // Sync on every render
+
   // Camera state (viewport offset)
   const cameraRef = useRef({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -254,7 +258,9 @@ const HomeContent = () => {
     }
 
     // Draw agents sorted by Y position for proper layering
-    const sortedAgents = [...agents].sort((a, b) => a.y - b.y);
+    // Read from ref to always get latest agents (avoids stale closure)
+    const currentAgents = agentsRef.current;
+    const sortedAgents = [...currentAgents].sort((a, b) => a.y - b.y);
     sortedAgents.forEach(agent => {
       const screenX = agent.x - 32 - camera.x;
       const screenY = agent.y - 60 - camera.y;
@@ -270,7 +276,7 @@ const HomeContent = () => {
 
     // Restore context state
     ctx.restore();
-  }, [grid, agents, centerX, startY]);
+  }, [grid, centerX, startY]); // agents removed - read from ref instead
 
   // Animation loop
   useEffect(() => {
