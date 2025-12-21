@@ -89,9 +89,9 @@ const HomeContent = () => {
       // Update all agents in place (zero allocations)
       pool.updateAll(gameDice);
 
-      // Spawn new agent every 5 rounds
+      // Spawn new agent every round
       const nextRound = round + 1;
-      if (nextRound % 5 === 0 && nextRound < MAX_ROUNDS && pool.count < MAX_AGENTS) {
+      if (nextRound < MAX_ROUNDS && pool.count < MAX_AGENTS) {
         const spawnDice = new DeterministicDice(keccak256(toHex(roll + "spawn" + round)));
         const randomDirection = spawnDice.roll(4) % 4;
         pool.add(mapWidth / 2, mapHeight / 2, randomDirection);

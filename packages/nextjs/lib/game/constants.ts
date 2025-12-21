@@ -36,7 +36,7 @@ export const TURN_RIGHT: Record<Direction, Direction> = {
 
 // Game settings
 export const MOVE_AMOUNT = 5; // pixels per move
-export const MAX_ROUNDS = 100;
+export const MAX_ROUNDS = 1900;
 export const ROUND_DELAY = 5;
 export const MAX_AGENTS = 2000; // Maximum agents for pool allocation
 
