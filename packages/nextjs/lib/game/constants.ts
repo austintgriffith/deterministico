@@ -35,7 +35,39 @@ export const TURN_RIGHT: Record<Direction, Direction> = {
 };
 
 // Game settings
-export const MOVE_AMOUNT = 5; // pixels per move
+export const MOVE_AMOUNT = 5; // pixels per move (legacy, use MOVE_SPEED_BY_TYPE for type-specific speeds)
+
+// Movement speed per vehicle type (matches VEHICLE_TYPES order)
+// heavy=3px, medium=4px, light=5px
+export const MOVE_SPEED_BY_TYPE = new Float32Array([
+  3, // heavy_comms (0)
+  3, // heavy_military (1)
+  3, // heavy_miner (2)
+  5, // light_comms (3)
+  5, // light_military (4)
+  5, // light_miner (5)
+  4, // medium_military (6)
+]);
+
+// Comms unit operating range (matches VEHICLE_TYPES order)
+// 0 means not a comms unit
+export const COMMS_RANGE = new Float32Array([
+  800, // heavy_comms (0) - 800px range
+  0, // heavy_military (1) - not comms
+  0, // heavy_miner (2) - not comms
+  800, // light_comms (3) - 800px range
+  0, // light_military (4) - not comms
+  0, // light_miner (5) - not comms
+  0, // medium_military (6) - not comms
+]);
+
+// Comms gravity behavior - creates web formation
+// Distance thresholds are multipliers of commsRange
+export const COMMS_REPEL_RATIO = 0.4; // Below range * 0.4, units repel
+export const COMMS_ATTRACT_RATIO = 0.8; // Above range * 0.8, units attract
+export const COMMS_REPEL_STRENGTH = 1.5; // Force multiplier for repulsion
+export const COMMS_ATTRACT_STRENGTH = 2.0; // Force multiplier for attraction
+export const COMMS_FORCE_THRESHOLD = 0.1; // Minimum force magnitude to trigger movement
 export const MAX_ROUNDS = 1000;
 export const SPAWN_CUTOFF_ROUND = 100; // Stop spawning new agents after this round
 export const ROUND_DELAY = 250;

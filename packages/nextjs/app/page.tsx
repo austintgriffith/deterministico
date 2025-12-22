@@ -18,7 +18,6 @@ import {
   TILE_WIDTH,
   TILE_X_SPACING,
   TILE_Y_SPACING,
-  VEHICLE_TYPES,
   generateGrid,
 } from "~~/lib/game";
 
@@ -150,16 +149,23 @@ const HomeContent = () => {
     const spawnPoints = generateSpawnPoints(spawnDice, centerX, GRID_SIZE, NUM_TEAMS, MIN_SPAWN_DISTANCE);
     teamSpawnPointsRef.current = spawnPoints;
 
+    // Set team spawn points for comms gravity behavior
+    for (let team = 0; team < NUM_TEAMS; team++) {
+      pool.setTeamSpawn(team, spawnPoints[team].x, spawnPoints[team].y);
+    }
+
     // Pick a random team to focus camera on
     const focusDice = new DeterministicDice(keccak256(toHex(roll + "focus-team")));
     focusTeamIndexRef.current = focusDice.roll(NUM_TEAMS);
 
     // Initialize one agent per team at their spawn point
+    // For now, only spawn comms units (0 = heavy_comms, 3 = light_comms)
+    const COMMS_TYPES = [0, 3];
     const initDice = new DeterministicDice(keccak256(toHex(roll + "agent-init")));
     for (let team = 0; team < NUM_TEAMS; team++) {
       const spawn = spawnPoints[team];
       const randomDirection = initDice.roll(4) % 4; // 0=north, 1=east, 2=south, 3=west
-      const randomVehicle = initDice.roll(VEHICLE_TYPES.length);
+      const randomVehicle = COMMS_TYPES[initDice.roll(COMMS_TYPES.length)];
       pool.add(spawn.x, spawn.y, randomDirection, team, randomVehicle);
     }
 
@@ -180,6 +186,8 @@ const HomeContent = () => {
       pool.updateAll(gameDice);
 
       // Spawn one new agent per team every 5 rounds (stop spawning after SPAWN_CUTOFF_ROUND)
+      // For now, only spawn comms units (0 = heavy_comms, 3 = light_comms)
+      const COMMS_TYPES = [0, 3];
       const nextRound = round + 1;
       if (nextRound % 5 === 0 && nextRound <= SPAWN_CUTOFF_ROUND) {
         const spawnDice = new DeterministicDice(keccak256(toHex(roll + "spawn" + round)));
@@ -189,7 +197,7 @@ const HomeContent = () => {
           if (pool.count >= MAX_AGENTS) break;
           const spawn = spawnPoints[team];
           const randomDirection = spawnDice.roll(4) % 4;
-          const randomVehicle = spawnDice.roll(VEHICLE_TYPES.length);
+          const randomVehicle = COMMS_TYPES[spawnDice.roll(COMMS_TYPES.length)];
           pool.add(spawn.x, spawn.y, randomDirection, team, randomVehicle);
         }
       }
