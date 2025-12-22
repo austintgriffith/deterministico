@@ -15,7 +15,7 @@ interface UseSimulationWorkerReturn {
   isWorkerReady: boolean;
   workerState: WorkerState;
   reset: () => void;
-  addAgent: (x: number, y: number, direction: number) => void;
+  addAgent: (x: number, y: number, direction: number, team: number, vehicleType: number) => void;
   tick: (rollSeed: string) => void;
   // Fallback pool for non-worker mode
   fallbackPool: AgentPool | null;
@@ -124,12 +124,12 @@ export function useSimulationWorker({
     }
   }, []);
 
-  const addAgent = useCallback((x: number, y: number, direction: number) => {
+  const addAgent = useCallback((x: number, y: number, direction: number, team: number, vehicleType: number) => {
     if (workerRef.current) {
-      workerRef.current.postMessage({ type: "addAgent", x, y, direction });
+      workerRef.current.postMessage({ type: "addAgent", x, y, direction, team, vehicleType });
       setWorkerState("processing");
     } else if (fallbackPoolRef.current) {
-      fallbackPoolRef.current.add(x, y, direction);
+      fallbackPoolRef.current.add(x, y, direction, team, vehicleType);
     }
   }, []);
 

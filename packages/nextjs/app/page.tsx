@@ -11,12 +11,80 @@ import {
   GRID_SIZE,
   MAX_AGENTS,
   MAX_ROUNDS,
+  MIN_SPAWN_DISTANCE,
+  NUM_TEAMS,
   ROUND_DELAY,
+  SPAWN_CUTOFF_ROUND,
   TILE_WIDTH,
   TILE_X_SPACING,
   TILE_Y_SPACING,
+  VEHICLE_TYPES,
   generateGrid,
 } from "~~/lib/game";
+
+// Spawn point type for team bases
+type SpawnPoint = { x: number; y: number };
+
+/**
+ * Convert tile coordinates (row, col) to world coordinates
+ */
+function tileToWorld(row: number, col: number, centerX: number): { x: number; y: number } {
+  return {
+    x: centerX + (col - row) * TILE_X_SPACING,
+    y: (col + row) * TILE_Y_SPACING,
+  };
+}
+
+/**
+ * Check if a point is far enough from all existing spawn points
+ */
+function isFarEnough(x: number, y: number, spawns: SpawnPoint[], minDistance: number): boolean {
+  for (const spawn of spawns) {
+    const dx = x - spawn.x;
+    const dy = y - spawn.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance < minDistance) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Generate spawn points for all teams within the valid tile area
+ * Uses tile coordinates to ensure spawns are always on the map
+ */
+function generateSpawnPoints(
+  dice: DeterministicDice,
+  centerX: number,
+  gridSize: number,
+  numTeams: number,
+  minDistance: number,
+): SpawnPoint[] {
+  const spawns: SpawnPoint[] = [];
+  const tileMargin = 10; // Stay this many tiles away from edges
+
+  for (let team = 0; team < numTeams; team++) {
+    let attempts = 0;
+    let worldX: number, worldY: number;
+
+    do {
+      // Generate random tile coordinates within bounds
+      const row = tileMargin + dice.roll(gridSize - 2 * tileMargin);
+      const col = tileMargin + dice.roll(gridSize - 2 * tileMargin);
+
+      // Convert to world coordinates
+      const world = tileToWorld(row, col, centerX);
+      worldX = world.x;
+      worldY = world.y;
+      attempts++;
+    } while (!isFarEnough(worldX, worldY, spawns, minDistance) && attempts < 100);
+
+    spawns.push({ x: worldX, y: worldY });
+  }
+
+  return spawns;
+}
 
 /**
  * Performance Configuration
@@ -42,12 +110,19 @@ const HomeContent = () => {
   const [round, setRound] = useState(0);
   const [rendererReady, setRendererReady] = useState(false);
 
+  // Team spawn points (one per team)
+  const teamSpawnPointsRef = useRef<SpawnPoint[]>([]);
+
+  // Random team to focus camera on at start
+  const focusTeamIndexRef = useRef<number>(0);
+
   // Force re-render counter for UI updates
   const [, forceUpdate] = useState(0);
 
   // Calculate map dimensions for agent spawn position
   const mapWidth = GRID_SIZE * 2 * TILE_X_SPACING + TILE_WIDTH;
   const mapHeight = GRID_SIZE * 2 * TILE_Y_SPACING + 80; // TILE_HEIGHT
+  const centerX = mapWidth / 2 - TILE_WIDTH / 2;
 
   // Generate grid
   const grid = useMemo(() => {
@@ -55,7 +130,7 @@ const HomeContent = () => {
     return generateGrid(roll as `0x${string}`, GRID_SIZE);
   }, [roll]);
 
-  // Initialize agent pool when roll changes
+  // Initialize agent pool and team spawn points when roll changes
   useEffect(() => {
     const pool = agentPoolRef.current;
     pool.reset();
@@ -63,18 +138,33 @@ const HomeContent = () => {
     if (!roll) {
       setRound(0);
       setRendererReady(false);
+      teamSpawnPointsRef.current = [];
       return;
     }
 
+    // Set map bounds for boundary checking
+    pool.setMapBounds(centerX, GRID_SIZE);
+
+    // Generate spawn points for all teams within the valid tile area
+    const spawnDice = new DeterministicDice(keccak256(toHex(roll + "spawn-points")));
+    const spawnPoints = generateSpawnPoints(spawnDice, centerX, GRID_SIZE, NUM_TEAMS, MIN_SPAWN_DISTANCE);
+    teamSpawnPointsRef.current = spawnPoints;
+
+    // Pick a random team to focus camera on
+    const focusDice = new DeterministicDice(keccak256(toHex(roll + "focus-team")));
+    focusTeamIndexRef.current = focusDice.roll(NUM_TEAMS);
+
+    // Initialize one agent per team at their spawn point
     const initDice = new DeterministicDice(keccak256(toHex(roll + "agent-init")));
-    const randomDirection = initDice.roll(4) % 4; // 0=north, 1=east, 2=south, 3=west
+    for (let team = 0; team < NUM_TEAMS; team++) {
+      const spawn = spawnPoints[team];
+      const randomDirection = initDice.roll(4) % 4; // 0=north, 1=east, 2=south, 3=west
+      const randomVehicle = initDice.roll(VEHICLE_TYPES.length);
+      pool.add(spawn.x, spawn.y, randomDirection, team, randomVehicle);
+    }
 
-    const agentStartX = mapWidth / 2;
-    const agentStartY = mapHeight / 2;
-
-    pool.add(agentStartX, agentStartY, randomDirection);
     setRound(0);
-  }, [roll, mapWidth, mapHeight]);
+  }, [roll, centerX]);
 
   // Game loop - uses AgentPool.updateAll() for zero-allocation updates
   useEffect(() => {
@@ -89,12 +179,19 @@ const HomeContent = () => {
       // Update all agents in place (zero allocations)
       pool.updateAll(gameDice);
 
-      // Spawn new agent every round
+      // Spawn one new agent per team every 5 rounds (stop spawning after SPAWN_CUTOFF_ROUND)
       const nextRound = round + 1;
-      if (nextRound < MAX_ROUNDS && pool.count < MAX_AGENTS) {
+      if (nextRound % 5 === 0 && nextRound <= SPAWN_CUTOFF_ROUND) {
         const spawnDice = new DeterministicDice(keccak256(toHex(roll + "spawn" + round)));
-        const randomDirection = spawnDice.roll(4) % 4;
-        pool.add(mapWidth / 2, mapHeight / 2, randomDirection);
+        const spawnPoints = teamSpawnPointsRef.current;
+
+        for (let team = 0; team < NUM_TEAMS; team++) {
+          if (pool.count >= MAX_AGENTS) break;
+          const spawn = spawnPoints[team];
+          const randomDirection = spawnDice.roll(4) % 4;
+          const randomVehicle = spawnDice.roll(VEHICLE_TYPES.length);
+          pool.add(spawn.x, spawn.y, randomDirection, team, randomVehicle);
+        }
       }
 
       setRound(nextRound);
@@ -148,7 +245,13 @@ const HomeContent = () => {
       )}
 
       {roll && grid.length > 0 && (
-        <GameRenderer grid={grid} agentPool={agentPoolRef.current} onReady={handleRendererReady} />
+        <GameRenderer
+          grid={grid}
+          agentPool={agentPoolRef.current}
+          teamSpawnPoints={teamSpawnPointsRef.current}
+          focusTeamIndex={focusTeamIndexRef.current}
+          onReady={handleRendererReady}
+        />
       )}
 
       {roll && grid.length === 0 && (

@@ -1,25 +1,91 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AgentPool, GRID_SIZE, TILE_HEIGHT, TILE_WIDTH, TILE_X_SPACING, TILE_Y_SPACING } from "~~/lib/game";
+import {
+  AgentPool,
+  GRID_SIZE,
+  TEAM_COLORS,
+  TEAM_HEX_COLORS,
+  TILE_HEIGHT,
+  TILE_WIDTH,
+  TILE_X_SPACING,
+  TILE_Y_SPACING,
+  VEHICLE_TYPES,
+} from "~~/lib/game";
 
-// Direction names for texture lookup: 0=north, 1=east, 2=south, 3=west
-const DIRECTION_NAMES = ["north", "east", "south", "west"] as const;
+// Direction to sprite sheet position: [col, row]
+// Sheet layout: [[SOUTH, EAST], [NORTH, WEST]]
+// Direction indices: 0=north, 1=east, 2=south, 3=west
+const DIRECTION_SPRITE_POS: [number, number][] = [
+  [0, 1], // 0=north → bottom-left
+  [1, 0], // 1=east → top-right
+  [0, 0], // 2=south → top-left
+  [1, 1], // 3=west → bottom-right
+];
+
+// Vehicle sprite info (frame dimensions stored per vehicle type)
+type VehicleSpriteInfo = {
+  image: HTMLImageElement;
+  frameWidth: number;
+  frameHeight: number;
+};
 
 // Image cache for canvas rendering
 type ImageCache = {
   tiles: HTMLImageElement[];
-  drills: HTMLImageElement[];
+  // Map of "vehicleType_teamColor" -> sprite info (e.g., "heavy_miner_orange")
+  vehicleSprites: Map<string, VehicleSpriteInfo>;
   loaded: boolean;
 };
 
-// Bucket sort constants for O(n) depth ordering
-const BUCKET_COUNT = 100;
+// Vehicle sprite vertical offset (negative = up, positive = down)
+const VEHICLE_Y_OFFSET = -30;
+
+// Spawn point type
+type SpawnPoint = { x: number; y: number };
 
 interface GameRendererProps {
   grid: number[][];
   agentPool: AgentPool;
+  teamSpawnPoints: SpawnPoint[];
+  focusTeamIndex?: number; // Team index to center camera on at start
   onReady?: () => void;
+}
+
+/**
+ * Get the sprite key for a given vehicle type and team color
+ */
+function getSpriteKey(vehicleTypeIndex: number, teamIndex: number): string {
+  const vehicleType = VEHICLE_TYPES[vehicleTypeIndex];
+  const teamColor = TEAM_COLORS[teamIndex];
+  return `${vehicleType}_${teamColor}`;
+}
+
+/**
+ * Draw a flag at the given position with the team's color
+ */
+function drawFlag(ctx: CanvasRenderingContext2D, x: number, y: number, hexColor: string): void {
+  // Pole (dark line)
+  ctx.strokeStyle = "#222";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - 50);
+  ctx.stroke();
+
+  // Flag triangle
+  ctx.fillStyle = hexColor;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 50);
+  ctx.lineTo(x + 28, y - 40);
+  ctx.lineTo(x, y - 30);
+  ctx.closePath();
+  ctx.fill();
+
+  // Flag outline
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 1;
+  ctx.stroke();
 }
 
 /**
@@ -31,12 +97,16 @@ interface GameRendererProps {
  * - Dirty flag rendering (only redraws when needed)
  * - Image caching
  */
-export function GameRenderer({ grid, agentPool, onReady }: GameRendererProps) {
+export function GameRenderer({ grid, agentPool, teamSpawnPoints, focusTeamIndex, onReady }: GameRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Image cache
-  const imageCacheRef = useRef<ImageCache>({ tiles: [], drills: [], loaded: false });
+  const imageCacheRef = useRef<ImageCache>({
+    tiles: [],
+    vehicleSprites: new Map(),
+    loaded: false,
+  });
   const [imagesLoaded, setImagesLoaded] = useState(false);
 
   // Camera state
@@ -51,9 +121,6 @@ export function GameRenderer({ grid, agentPool, onReady }: GameRendererProps) {
 
   // Animation frame ref
   const animationFrameRef = useRef<number>(0);
-
-  // Bucket sort buckets (reused across frames)
-  const bucketsRef = useRef<number[][]>(Array.from({ length: BUCKET_COUNT }, () => []));
 
   const MIN_ZOOM = 0.25;
   const MAX_ZOOM = 3;
@@ -70,7 +137,8 @@ export function GameRenderer({ grid, agentPool, onReady }: GameRendererProps) {
     if (cache.loaded) return;
 
     let loadedCount = 0;
-    const totalImages = 6 + 4; // 6 tiles + 4 drill directions
+    // 6 tiles + (7 vehicle types * 12 team colors) = 6 + 84 = 90 total images
+    const totalImages = 6 + VEHICLE_TYPES.length * TEAM_COLORS.length;
 
     const onLoad = () => {
       loadedCount++;
@@ -88,13 +156,22 @@ export function GameRenderer({ grid, agentPool, onReady }: GameRendererProps) {
       cache.tiles[i] = img;
     }
 
-    // Load drill images in direction order: north=0, east=1, south=2, west=3
-    DIRECTION_NAMES.forEach((dir, index) => {
-      const img = new window.Image();
-      img.onload = onLoad;
-      img.src = `/vehicles/drill_${dir}.png`;
-      cache.drills[index] = img;
-    });
+    // Load all vehicle sprite sheets (7 vehicle types * 12 team colors = 84 sprites)
+    for (const vehicleType of VEHICLE_TYPES) {
+      for (const teamColor of TEAM_COLORS) {
+        const spriteKey = `${vehicleType}_${teamColor}`;
+        const vehicleImg = new window.Image();
+        vehicleImg.onload = () => {
+          cache.vehicleSprites.set(spriteKey, {
+            image: vehicleImg,
+            frameWidth: vehicleImg.naturalWidth / 2,
+            frameHeight: vehicleImg.naturalHeight / 2,
+          });
+          onLoad();
+        };
+        vehicleImg.src = `/vehicles/${spriteKey}.png`;
+      }
+    }
   }, []);
 
   // Center camera and setup canvas when images are loaded
@@ -111,53 +188,23 @@ export function GameRenderer({ grid, agentPool, onReady }: GameRendererProps) {
     // Reset zoom
     zoomRef.current = 1;
 
-    // Center camera on the map
-    cameraRef.current = {
-      x: mapWidth / 2 - canvas.width / 2,
-      y: mapHeight / 2 - canvas.height / 2,
-    };
+    // Center camera on focused team's spawn point, or map center if not specified
+    if (focusTeamIndex !== undefined && teamSpawnPoints[focusTeamIndex]) {
+      const spawn = teamSpawnPoints[focusTeamIndex];
+      cameraRef.current = {
+        x: spawn.x - canvas.width / 2,
+        y: spawn.y - canvas.height / 2,
+      };
+    } else {
+      // Fallback: center on the map
+      cameraRef.current = {
+        x: mapWidth / 2 - canvas.width / 2,
+        y: mapHeight / 2 - canvas.height / 2,
+      };
+    }
 
     onReady?.();
-  }, [imagesLoaded, mapWidth, mapHeight, onReady]);
-
-  // O(n) bucket sort for isometric depth ordering
-  // In this isometric view, depth is determined by Y position (screen vertical)
-  // Higher Y = lower on screen = closer to camera = drawn last (in front)
-  const getDepthSortedIndices = useCallback((): number[] => {
-    const buckets = bucketsRef.current;
-    const pool = agentPool;
-
-    // Clear buckets
-    for (const bucket of buckets) bucket.length = 0;
-
-    // Bucket by Y position (Y ranges from 0 to mapHeight)
-    const bucketSize = mapHeight / BUCKET_COUNT;
-
-    // O(n) bucket assignment using Y for depth
-    for (let i = 0; i < pool.count; i++) {
-      const bucket = Math.floor(pool.y[i] / bucketSize);
-      buckets[Math.min(Math.max(bucket, 0), BUCKET_COUNT - 1)].push(i);
-    }
-
-    // Flatten buckets into sorted array (lower Y = further back = drawn first)
-    // Sort within each bucket to handle agents with similar Y values
-    const result: number[] = [];
-    for (const bucket of buckets) {
-      // Sort bucket by Y (ascending), then by X (ascending) as tiebreaker
-      // Lower Y = behind, and when Y is equal, lower X = behind (left side)
-      if (bucket.length > 1) {
-        bucket.sort((a, b) => {
-          const yDiff = pool.y[a] - pool.y[b];
-          if (yDiff !== 0) return yDiff;
-          return pool.x[a] - pool.x[b]; // Secondary sort by X
-        });
-      }
-      for (const i of bucket) {
-        result.push(i);
-      }
-    }
-    return result;
-  }, [agentPool, mapHeight]);
+  }, [imagesLoaded, mapWidth, mapHeight, focusTeamIndex, teamSpawnPoints, onReady]);
 
   // Canvas draw function with viewport culling
   const draw = useCallback(() => {
@@ -228,26 +275,78 @@ export function GameRenderer({ grid, agentPool, onReady }: GameRendererProps) {
       }
     }
 
-    // Draw agents using O(n) bucket sort for depth ordering
-    const sortedIndices = getDepthSortedIndices();
+    // Create a combined list of drawable objects (agents and flags) for proper depth sorting
+    // Each entry is: { type: 'agent' | 'flag', y: number, index: number }
+    type Drawable = { type: "agent" | "flag"; y: number; index: number };
+    const drawables: Drawable[] = [];
+
+    // Add all agents to the drawable list
     const pool = agentPool;
+    for (let i = 0; i < pool.count; i++) {
+      drawables.push({ type: "agent", y: pool.y[i], index: i });
+    }
 
-    for (const i of sortedIndices) {
-      const screenX = pool.x[i] - 32 - camera.x;
-      const screenY = pool.y[i] - 60 - camera.y;
+    // Add all flags to the drawable list (using their base Y position for sorting)
+    // Offset the flag's sort Y slightly back so it doesn't appear too far in front
+    const FLAG_DEPTH_OFFSET = -25;
+    for (let teamIndex = 0; teamIndex < teamSpawnPoints.length; teamIndex++) {
+      const spawn = teamSpawnPoints[teamIndex];
+      drawables.push({ type: "flag", y: spawn.y + FLAG_DEPTH_OFFSET, index: teamIndex });
+    }
 
-      // Only draw if visible
-      if (screenX + 64 > 0 && screenX < visibleWidth && screenY + 64 > 0 && screenY < visibleHeight) {
-        const drillImg = cache.drills[pool.direction[i]];
-        if (drillImg) {
-          ctx.drawImage(drillImg, screenX, screenY, 64, 64);
+    // Sort by Y position (lower Y = further back = drawn first)
+    drawables.sort((a, b) => a.y - b.y);
+
+    // Draw all objects in depth-sorted order
+    for (const drawable of drawables) {
+      if (drawable.type === "flag") {
+        const spawn = teamSpawnPoints[drawable.index];
+        const flagScreenX = spawn.x - camera.x;
+        const flagScreenY = spawn.y - camera.y;
+
+        // Only draw if visible
+        if (flagScreenX > -50 && flagScreenX < visibleWidth + 50 && flagScreenY > -60 && flagScreenY < visibleHeight) {
+          const teamColor = TEAM_COLORS[drawable.index];
+          const hexColor = TEAM_HEX_COLORS[teamColor];
+          drawFlag(ctx, flagScreenX, flagScreenY, hexColor);
+        }
+      } else {
+        // Draw agent
+        const i = drawable.index;
+        const screenX = pool.x[i] - 32 - camera.x;
+        const screenY = pool.y[i] + VEHICLE_Y_OFFSET - camera.y;
+
+        // Only draw if visible
+        if (screenX + 64 > 0 && screenX < visibleWidth && screenY + 64 > 0 && screenY < visibleHeight) {
+          // Get the correct sprite for this agent's team and vehicle type
+          const spriteKey = getSpriteKey(pool.vehicleType[i], pool.team[i]);
+          const spriteInfo = cache.vehicleSprites.get(spriteKey);
+
+          if (spriteInfo) {
+            const dir = pool.direction[i];
+            const [col, row] = DIRECTION_SPRITE_POS[dir];
+            const sx = col * spriteInfo.frameWidth;
+            const sy = row * spriteInfo.frameHeight;
+
+            ctx.drawImage(
+              spriteInfo.image,
+              sx,
+              sy,
+              spriteInfo.frameWidth,
+              spriteInfo.frameHeight,
+              screenX,
+              screenY,
+              64,
+              64,
+            );
+          }
         }
       }
     }
 
     // Restore context state
     ctx.restore();
-  }, [grid, centerX, startY, getDepthSortedIndices, agentPool]);
+  }, [grid, centerX, startY, agentPool, teamSpawnPoints]);
 
   // Animation loop
   useEffect(() => {

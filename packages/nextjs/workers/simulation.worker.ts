@@ -16,6 +16,8 @@ const MOVE_AMOUNT = 5;
 let x: Float32Array;
 let y: Float32Array;
 let direction: Uint8Array;
+let team: Uint8Array;
+let vehicleType: Uint8Array;
 let count = 0;
 let maxAgents = 0;
 
@@ -34,6 +36,8 @@ type AddAgentMessage = {
   x: number;
   y: number;
   direction: number;
+  team: number;
+  vehicleType: number;
 };
 
 type TickMessage = {
@@ -57,6 +61,8 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
       x = new Float32Array(max);
       y = new Float32Array(max);
       direction = new Uint8Array(max);
+      team = new Uint8Array(max);
+      vehicleType = new Uint8Array(max);
       count = 0;
 
       self.postMessage({ type: "ready" });
@@ -70,11 +76,13 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
     }
 
     case "addAgent": {
-      const { x: ax, y: ay, direction: dir } = e.data as AddAgentMessage;
+      const { x: ax, y: ay, direction: dir, team: t, vehicleType: vt } = e.data as AddAgentMessage;
       if (count < maxAgents) {
         x[count] = ax;
         y[count] = ay;
         direction[count] = dir;
+        team[count] = t;
+        vehicleType[count] = vt;
         count++;
       }
       self.postMessage({ type: "agentAdded", count });
