@@ -137,8 +137,8 @@ export function GameRenderer({ grid, agentPool, teamSpawnPoints, focusTeamIndex,
     if (cache.loaded) return;
 
     let loadedCount = 0;
-    // 6 tiles + (7 vehicle types * 12 team colors) = 6 + 84 = 90 total images
-    const totalImages = 6 + VEHICLE_TYPES.length * TEAM_COLORS.length;
+    // 13 tiles + (7 vehicle types * 12 team colors) = 13 + 84 = 97 total images
+    const totalImages = 13 + VEHICLE_TYPES.length * TEAM_COLORS.length;
 
     const onLoad = () => {
       loadedCount++;
@@ -148,8 +148,8 @@ export function GameRenderer({ grid, agentPool, teamSpawnPoints, focusTeamIndex,
       }
     };
 
-    // Load tile images (1-6)
-    for (let i = 1; i <= 6; i++) {
+    // Load tile images (1-13)
+    for (let i = 1; i <= 13; i++) {
       const img = new window.Image();
       img.onload = onLoad;
       img.src = `/surface/surface_normal_${i}.png`;

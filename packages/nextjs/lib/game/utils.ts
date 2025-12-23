@@ -27,9 +27,9 @@ export function processAgentAction(agent: Agent, action: number): Agent {
 }
 
 /**
- * Generate a 2D grid of tile types (1-5) from a roll hash
+ * Generate a 2D grid of tile types (1-13) from a roll hash
  */
 export function generateGrid(roll: `0x${string}`, gridSize: number): number[][] {
   const dice = new DeterministicDice(roll);
-  return Array.from({ length: gridSize }, () => Array.from({ length: gridSize }, () => dice.roll(5) + 1));
+  return Array.from({ length: gridSize }, () => Array.from({ length: gridSize }, () => dice.roll(13) + 1));
 }
