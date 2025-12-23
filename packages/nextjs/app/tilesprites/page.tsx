@@ -1,30 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-// Sprite sheet configuration
-const SPRITE_SHEET_COLS = 5;
-const SPRITE_SHEET_ROWS = 3;
-const TOTAL_TILES = SPRITE_SHEET_COLS * SPRITE_SHEET_ROWS;
-
-// Available sprite sheets
-const SPRITE_SHEETS = [
-  "ground_tiles_00",
-  "ground_tiles_01",
-  "ground_tiles_02",
-  "ground_tiles_03",
-  "ground_tiles_04",
-  "ground_tiles_05",
-  "ground_tiles_06",
-  "ground_tiles_07",
-  "ground_tiles_08",
-  "ground_tiles_09",
-  "ground_tiles_10",
-  "mountain_tiles_1",
-  "mountain_tiles_2",
-  "mountain_tiles_3",
-  "rubymountain_tiles_01",
-] as const;
+import {
+  SPRITE_SHEETS,
+  SPRITE_SHEET_COLS,
+  SPRITE_SHEET_ROWS,
+  TERRAIN_SHEETS,
+  TOTAL_TILES_PER_SHEET,
+  TerrainType,
+  getWeightedTerrainType,
+  hash,
+  smoothTerrainGrid,
+} from "~~/lib/game";
 
 // Display size for the tile preview
 const PREVIEW_WIDTH = 200;
@@ -74,30 +61,61 @@ export default function TileSpritesPage() {
   const offsetY = startY + currentRow * stepY;
   const currentTileIndex = currentRow * SPRITE_SHEET_COLS + currentCol;
 
-  // Simple hash function for better randomization (avoids diagonal patterns)
-  const hash = (x: number, y: number, s: number): number => {
-    let h = x * 374761393 + y * 668265263 + s * 1013904223;
-    h = (h ^ (h >> 13)) * 1274126177;
-    h = h ^ (h >> 16);
-    return h >>> 0; // Convert to unsigned 32-bit
-  };
-
-  // Generate deterministic random tile data for the surface (seeded by position and global seed)
-  // Each tile has: { sheetIndex, tileIndex }
+  // Generate deterministic terrain map with three phases:
+  // 1. Weighted type assignment
+  // 2. Smoothing passes
+  // 3. Tile variant selection
   const surfaceTiles = useMemo(() => {
+    // Convert numeric seed to bigint for keccak256 compatibility
+    const seedBigInt = BigInt(seed);
+
+    // Phase 1: Generate initial type grid with weighted random selection
+    let typeGrid: TerrainType[][] = [];
+    for (let row = 0; row < SURFACE_GRID_SIZE; row++) {
+      const rowTypes: TerrainType[] = [];
+      for (let col = 0; col < SURFACE_GRID_SIZE; col++) {
+        rowTypes.push(getWeightedTerrainType(row, col, seedBigInt));
+      }
+      typeGrid.push(rowTypes);
+    }
+
+    // Phase 2: Apply smoothing passes (2 passes for natural clustering)
+    typeGrid = smoothTerrainGrid(typeGrid, 1, seedBigInt);
+    typeGrid = smoothTerrainGrid(typeGrid, 2, seedBigInt);
+
+    // Phase 3: Select tile variants based on terrain type
     const tiles: { sheetIndex: number; tileIndex: number }[][] = [];
     for (let row = 0; row < SURFACE_GRID_SIZE; row++) {
       const rowTiles: { sheetIndex: number; tileIndex: number }[] = [];
       for (let col = 0; col < SURFACE_GRID_SIZE; col++) {
-        // Use hash for better randomization
-        const h1 = hash(row, col, seed);
-        const h2 = hash(row + 1000, col + 1000, seed);
-        const tileSeed = h1 % TOTAL_TILES;
-        const sheetSeed = h2 % SPRITE_SHEETS.length;
+        const terrainType = typeGrid[row][col];
 
-        // If specific sheet selected, use that; otherwise use random sheet
-        const sheetIndex = selectedSheet === "all" ? sheetSeed : SPRITE_SHEETS.findIndex(s => s === selectedSheet);
-        rowTiles.push({ sheetIndex: sheetIndex >= 0 ? sheetIndex : 0, tileIndex: tileSeed });
+        // Get available sheets for this terrain type
+        const availableSheets = TERRAIN_SHEETS[terrainType];
+
+        // Use deterministic hash to select sheet and tile (now returns bigint)
+        const sheetHash = hash(row + 2000, col + 2000, seedBigInt);
+        const tileHash = hash(row + 3000, col + 3000, seedBigInt);
+
+        // Select random sheet from available sheets for this terrain type
+        const selectedSheetName = availableSheets[Number(sheetHash % BigInt(availableSheets.length))];
+
+        // Find the index in the full SPRITE_SHEETS array
+        const sheetIndex = SPRITE_SHEETS.findIndex(s => s === selectedSheetName);
+
+        // Select random tile index (0-14 for 5x3 grid)
+        const tileIndex = Number(tileHash % BigInt(TOTAL_TILES_PER_SHEET));
+
+        // If specific sheet selected in UI, override terrain-based selection
+        if (selectedSheet !== "all") {
+          const overrideIndex = SPRITE_SHEETS.findIndex(s => s === selectedSheet);
+          rowTiles.push({
+            sheetIndex: overrideIndex >= 0 ? overrideIndex : sheetIndex,
+            tileIndex,
+          });
+        } else {
+          rowTiles.push({ sheetIndex, tileIndex });
+        }
       }
       tiles.push(rowTiles);
     }
@@ -529,7 +547,7 @@ const SURFACE_SPACING_Y = ${surfaceSpacingY};`;
               <div>
                 <h2 className="text-lg font-semibold mb-2">Jump to Tile</h2>
                 <div className="grid grid-cols-5 gap-1">
-                  {Array.from({ length: TOTAL_TILES }, (_, i) => (
+                  {Array.from({ length: TOTAL_TILES_PER_SHEET }, (_, i) => (
                     <button
                       key={i}
                       onClick={() => jumpToTile(i)}

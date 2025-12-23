@@ -19,85 +19,9 @@ import {
   TILE_X_SPACING,
   TILE_Y_SPACING,
   generateGrid,
+  generateSpawnPoints,
 } from "~~/lib/game";
-
-// Spawn point type for team bases
-type SpawnPoint = { x: number; y: number };
-
-/**
- * Convert tile coordinates (row, col) to world coordinates
- */
-function tileToWorld(row: number, col: number, centerX: number): { x: number; y: number } {
-  return {
-    x: centerX + (col - row) * TILE_X_SPACING,
-    y: (col + row) * TILE_Y_SPACING,
-  };
-}
-
-/**
- * Check if a point is far enough from all existing spawn points
- */
-function isFarEnough(x: number, y: number, spawns: SpawnPoint[], minDistance: number): boolean {
-  for (const spawn of spawns) {
-    const dx = x - spawn.x;
-    const dy = y - spawn.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance < minDistance) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Generate spawn points for all teams within the valid tile area
- * Uses tile coordinates to ensure spawns are always on the map
- */
-function generateSpawnPoints(
-  dice: DeterministicDice,
-  centerX: number,
-  gridSize: number,
-  numTeams: number,
-  minDistance: number,
-): SpawnPoint[] {
-  const spawns: SpawnPoint[] = [];
-  const tileMargin = 10; // Stay this many tiles away from edges
-
-  for (let team = 0; team < numTeams; team++) {
-    let attempts = 0;
-    let worldX: number, worldY: number;
-
-    do {
-      // Generate random tile coordinates within bounds
-      const row = tileMargin + dice.roll(gridSize - 2 * tileMargin);
-      const col = tileMargin + dice.roll(gridSize - 2 * tileMargin);
-
-      // Convert to world coordinates
-      const world = tileToWorld(row, col, centerX);
-      worldX = world.x;
-      worldY = world.y;
-      attempts++;
-    } while (!isFarEnough(worldX, worldY, spawns, minDistance) && attempts < 100);
-
-    spawns.push({ x: worldX, y: worldY });
-  }
-
-  return spawns;
-}
-
-/**
- * Performance Configuration
- *
- * USE_WORKER: Enable Web Worker for off-main-thread simulation.
- * Set to true for maximum performance with 1000+ agents.
- * The worker keeps simulation computation off the main thread,
- * allowing the renderer to maintain smooth 60fps.
- *
- * To enable: set USE_WORKER = true and import useSimulationWorker hook.
- * See workers/simulation.worker.ts and hooks/useSimulationWorker.ts
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const USE_WORKER = false;
+import type { SpawnPoint } from "~~/lib/game";
 
 const HomeContent = () => {
   const router = useRouter();
