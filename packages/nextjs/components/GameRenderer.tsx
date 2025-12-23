@@ -1,12 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import { createDrawables, drawEntities, drawTiles, useCamera, useImageLoader } from "./game";
-import { AgentPool, GRID_SIZE, TILE_HEIGHT, TILE_WIDTH, TILE_X_SPACING, TILE_Y_SPACING } from "~~/lib/game";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createDrawables,
+  drawAgentDebugMarkers,
+  drawEntities,
+  drawTerrainDebug,
+  drawTiles,
+  useCamera,
+  useImageLoader,
+} from "./game";
+import {
+  AgentPool,
+  GRID_SIZE,
+  TILE_HEIGHT,
+  TILE_WIDTH,
+  TILE_X_SPACING,
+  TILE_Y_SPACING,
+  TerrainType,
+} from "~~/lib/game";
 import type { SpawnPoint, TileData } from "~~/lib/game";
 
 interface GameRendererProps {
   grid: TileData[][];
+  terrainGrid?: TerrainType[][]; // For debug overlay
   agentPool: AgentPool;
   teamSpawnPoints: SpawnPoint[];
   focusTeamIndex?: number; // Team index to center camera on at start
@@ -21,11 +38,25 @@ interface GameRendererProps {
  * - O(n) bucket sort for agent depth ordering
  * - Dirty flag rendering (only redraws when needed)
  * - Image caching
+ *
+ * Debug mode (press 'D'):
+ * - Shows terrain overlay (green = ground, red = mountain)
+ * - Shows agent position markers
  */
-export function GameRenderer({ grid, agentPool, teamSpawnPoints, focusTeamIndex, onReady }: GameRendererProps) {
+export function GameRenderer({
+  grid,
+  terrainGrid,
+  agentPool,
+  teamSpawnPoints,
+  focusTeamIndex,
+  onReady,
+}: GameRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>(0);
+
+  // Debug mode state
+  const [debugMode, setDebugMode] = useState(false);
 
   // Image loading
   const { imageCacheRef, imagesLoaded } = useImageLoader();
@@ -112,13 +143,23 @@ export function GameRenderer({ grid, agentPool, teamSpawnPoints, focusTeamIndex,
     // Draw tiles
     drawTiles(ctx, grid, cache, centerX, startY, camera.x, camera.y, visibleWidth, visibleHeight, buffer);
 
+    // Draw debug terrain overlay if enabled
+    if (debugMode && terrainGrid) {
+      drawTerrainDebug(ctx, terrainGrid, centerX, startY, camera.x, camera.y, visibleWidth, visibleHeight, buffer);
+    }
+
     // Create depth-sorted drawables and draw entities
     const drawables = createDrawables(agentPool, teamSpawnPoints);
     drawEntities(ctx, drawables, agentPool, teamSpawnPoints, cache, camera.x, camera.y, visibleWidth, visibleHeight);
 
+    // Draw debug agent markers if enabled
+    if (debugMode) {
+      drawAgentDebugMarkers(ctx, agentPool, camera.x, camera.y, visibleWidth, visibleHeight, centerX, terrainGrid);
+    }
+
     // Restore context state
     ctx.restore();
-  }, [grid, centerX, startY, agentPool, teamSpawnPoints, imageCacheRef, cameraRef, zoomRef]);
+  }, [grid, terrainGrid, debugMode, centerX, startY, agentPool, teamSpawnPoints, imageCacheRef, cameraRef, zoomRef]);
 
   // Animation loop
   useEffect(() => {
@@ -155,6 +196,18 @@ export function GameRenderer({ grid, agentPool, teamSpawnPoints, focusTeamIndex,
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [imagesLoaded]);
+
+  // Debug mode toggle (press 'D')
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "d" || e.key === "D") {
+        setDebugMode(prev => !prev);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Create event handlers that need canvas ref
   const handleTouchMove = createTouchMoveHandler(canvasRef);

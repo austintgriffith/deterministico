@@ -1,4 +1,4 @@
-import { GRID_SIZE, NUM_TEAMS } from "./constants";
+import { GRID_SIZE, NUM_TEAMS, TerrainType } from "./constants";
 import { type AgentArrays, updateAgent } from "./simulation";
 import { DeterministicDice } from "deterministic-dice";
 
@@ -13,6 +13,9 @@ export class AgentPool {
   // Map bounds for boundary checking
   centerX: number = 0;
   gridSize: number = GRID_SIZE;
+
+  // Terrain grid for movement restrictions (agents can only move on "ground" tiles)
+  terrainGrid: TerrainType[][] | null = null;
 
   // Contiguous memory blocks for cache-friendly access
   x: Float32Array;
@@ -56,6 +59,14 @@ export class AgentPool {
   setMapBounds(centerX: number, gridSize: number): void {
     this.centerX = centerX;
     this.gridSize = gridSize;
+  }
+
+  /**
+   * Set the terrain grid for movement restrictions
+   * Agents can only move on "ground" tiles
+   */
+  setTerrainGrid(terrainGrid: TerrainType[][]): void {
+    this.terrainGrid = terrainGrid;
   }
 
   /**
@@ -103,13 +114,14 @@ export class AgentPool {
    * Update all agents based on deterministic dice rolls.
    * Zero allocations - mutates in place.
    * Includes boundary checking to prevent agents from leaving the map.
+   * Includes terrain checking to prevent agents from moving onto non-ground tiles.
    *
    * Comms units use gravity-based behavior - they accumulate forces from all
    * nearby connections (home base + other same-team comms). Too close = repel,
    * too far = attract. This creates a natural web formation.
    *
    * Normal agents action mapping (0-15):
-   * - 0-9 (62.5%): Move forward (if within bounds)
+   * - 0-9 (62.5%): Move forward (if within bounds and terrain is traversable)
    * - 10-12 (18.75%): Turn left
    * - 13-15 (18.75%): Turn right
    */
@@ -120,7 +132,17 @@ export class AgentPool {
     for (let i = 0; i < count; i++) {
       // Always consume a dice roll for determinism
       const action = dice.roll(16);
-      updateAgent(arrays, i, count, action, this.teamSpawnX, this.teamSpawnY, this.centerX, this.gridSize);
+      updateAgent(
+        arrays,
+        i,
+        count,
+        action,
+        this.teamSpawnX,
+        this.teamSpawnY,
+        this.centerX,
+        this.gridSize,
+        this.terrainGrid,
+      );
     }
   }
 }

@@ -47,9 +47,9 @@ const HomeContent = () => {
   const mapHeight = GRID_SIZE * 2 * TILE_Y_SPACING + 80; // TILE_HEIGHT
   const centerX = mapWidth / 2 - TILE_WIDTH / 2;
 
-  // Generate grid
-  const grid = useMemo(() => {
-    if (!roll) return [];
+  // Generate grid (returns both tiles for rendering and terrain for movement)
+  const gridData = useMemo(() => {
+    if (!roll) return null;
     return generateGrid(roll as `0x${string}`, GRID_SIZE);
   }, [roll]);
 
@@ -58,7 +58,7 @@ const HomeContent = () => {
     const pool = agentPoolRef.current;
     pool.reset();
 
-    if (!roll) {
+    if (!roll || !gridData) {
       setRound(0);
       setRendererReady(false);
       teamSpawnPointsRef.current = [];
@@ -68,9 +68,20 @@ const HomeContent = () => {
     // Set map bounds for boundary checking
     pool.setMapBounds(centerX, GRID_SIZE);
 
+    // Set terrain grid for movement restrictions (agents can only move on ground tiles)
+    pool.setTerrainGrid(gridData.terrain);
+
     // Generate spawn points for all teams within the valid tile area
+    // Spawn points must be on flat ground tiles with at least 4 ground neighbors
     const spawnDice = new DeterministicDice(keccak256(toHex(roll + "spawn-points")));
-    const spawnPoints = generateSpawnPoints(spawnDice, centerX, GRID_SIZE, NUM_TEAMS, MIN_SPAWN_DISTANCE);
+    const spawnPoints = generateSpawnPoints(
+      spawnDice,
+      centerX,
+      GRID_SIZE,
+      NUM_TEAMS,
+      MIN_SPAWN_DISTANCE,
+      gridData.terrain,
+    );
     teamSpawnPointsRef.current = spawnPoints;
 
     // Set team spawn points for comms gravity behavior
@@ -94,7 +105,7 @@ const HomeContent = () => {
     }
 
     setRound(0);
-  }, [roll, centerX]);
+  }, [roll, centerX, gridData]);
 
   // Game loop - uses AgentPool.updateAll() for zero-allocation updates
   useEffect(() => {
@@ -176,9 +187,10 @@ const HomeContent = () => {
         </div>
       )}
 
-      {roll && grid.length > 0 && (
+      {roll && gridData && (
         <GameRenderer
-          grid={grid}
+          grid={gridData.tiles}
+          terrainGrid={gridData.terrain}
           agentPool={agentPoolRef.current}
           teamSpawnPoints={teamSpawnPointsRef.current}
           focusTeamIndex={focusTeamIndexRef.current}
@@ -186,7 +198,7 @@ const HomeContent = () => {
         />
       )}
 
-      {roll && grid.length === 0 && (
+      {roll && !gridData && (
         <div className="flex items-center justify-center h-full w-full">
           <div className="text-white">Loading...</div>
         </div>

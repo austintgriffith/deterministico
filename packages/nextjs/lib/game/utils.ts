@@ -5,6 +5,10 @@ import {
   TERRAIN_SHEETS,
   TERRAIN_TYPES,
   TERRAIN_WEIGHTS,
+  TILE_RENDER_HEIGHT,
+  TILE_RENDER_WIDTH,
+  TILE_START_Y,
+  TILE_STEP_Y,
   TILE_X_SPACING,
   TILE_Y_SPACING,
   TOTAL_TILES_PER_SHEET,
@@ -143,16 +147,26 @@ export function smoothTerrainGrid(grid: TerrainType[][], passNumber: number, see
 }
 
 /**
+ * Result of grid generation including both tile data and terrain types
+ */
+export type GridData = {
+  tiles: TileData[][];
+  terrain: TerrainType[][];
+};
+
+/**
  * Generate a 2D grid of tile data from a roll hash
  * Uses three-phase generation:
  * 1. Weighted type assignment (ground 80%, mountain 18%, rubyMountain 2%)
  * 2. Smoothing passes (cellular automata for natural clustering)
  * 3. Tile variant selection (random sheet + tile from terrain type)
  *
+ * Returns both tile data (for rendering) and terrain types (for movement checks).
+ *
  * Solidity equivalent for seed derivation:
  * uint256 seed = uint256(keccak256(abi.encodePacked(roll, "map")));
  */
-export function generateGrid(roll: `0x${string}`, gridSize: number): TileData[][] {
+export function generateGrid(roll: `0x${string}`, gridSize: number): GridData {
   // Derive seed from roll hash using keccak256 (Solidity compatible)
   const seed = BigInt(keccak256(encodePacked(["bytes32", "string"], [roll as `0x${string}`, "map"])));
 
@@ -171,7 +185,7 @@ export function generateGrid(roll: `0x${string}`, gridSize: number): TileData[][
   typeGrid = smoothTerrainGrid(typeGrid, 2, seed);
 
   // Phase 3: Select tile variants based on terrain type
-  const grid: TileData[][] = [];
+  const tiles: TileData[][] = [];
   for (let row = 0; row < gridSize; row++) {
     const rowTiles: TileData[] = [];
     for (let col = 0; col < gridSize; col++) {
@@ -195,10 +209,10 @@ export function generateGrid(roll: `0x${string}`, gridSize: number): TileData[][
 
       rowTiles.push({ sheetIndex, tileIndex });
     }
-    grid.push(rowTiles);
+    tiles.push(rowTiles);
   }
 
-  return grid;
+  return { tiles, terrain: typeGrid };
 }
 
 /**
@@ -206,16 +220,43 @@ export function generateGrid(roll: `0x${string}`, gridSize: number): TileData[][
  */
 
 /**
- * Convert tile coordinates (row, col) to world coordinates
+ * Convert tile coordinates (row, col) to world coordinates (top-left corner of tile)
  * @param row - Tile row index
  * @param col - Tile column index
  * @param centerX - X coordinate of map center
- * @returns World coordinates { x, y }
+ * @returns World coordinates { x, y } of tile's top-left corner
  */
 export function tileToWorld(row: number, col: number, centerX: number): { x: number; y: number } {
   return {
     x: centerX + (col - row) * TILE_X_SPACING,
     y: (col + row) * TILE_Y_SPACING,
+  };
+}
+
+/**
+ * Convert tile coordinates (row, col) to world coordinates at the center of the tile
+ * Use this for placing entities (flags, spawn points) that should be centered on tiles.
+ *
+ * The isometric diamond is positioned within the 200x200 tile image:
+ * - X center: TILE_RENDER_WIDTH / 2 = 100 (horizontal center of image)
+ * - Y center: Calculated from sprite offset (TILE_START_Y scaled) + half diamond height
+ *   The diamond starts ~41px from top (34 * 200/166) and is 94px tall (2 * TILE_Y_SPACING)
+ *   So center is at ~88px from image top
+ *
+ * @param row - Tile row index
+ * @param col - Tile column index
+ * @param centerX - X coordinate of map center
+ * @returns World coordinates { x, y } at the center of the tile diamond
+ */
+export function tileCenterToWorld(row: number, col: number, centerX: number): { x: number; y: number } {
+  // Calculate the Y offset to the center of the isometric diamond within the tile image
+  // Diamond top is at scaled TILE_START_Y, center is half a diamond height below that
+  const scaledTopOffset = (TILE_START_Y * TILE_RENDER_HEIGHT) / TILE_STEP_Y; // ~41
+  const tileCenterYOffset = scaledTopOffset + TILE_Y_SPACING; // ~88
+
+  return {
+    x: centerX + (col - row) * TILE_X_SPACING + TILE_RENDER_WIDTH / 2,
+    y: (col + row) * TILE_Y_SPACING + tileCenterYOffset,
   };
 }
 
@@ -240,14 +281,61 @@ export function isFarEnough(x: number, y: number, spawns: SpawnPoint[], minDista
 }
 
 /**
+ * Check if a tile is a valid spawn location.
+ * A valid spawn tile must be on "ground" terrain AND have at least 4 ground neighbors.
+ * This ensures home bases are placed on open flat areas, not isolated tiles.
+ *
+ * @param row - Tile row index
+ * @param col - Tile column index
+ * @param terrainGrid - 2D array of terrain types
+ * @param minGroundNeighbors - Minimum number of ground neighbors required (default 4)
+ * @returns true if the tile is a valid spawn location
+ */
+export function isValidSpawnTile(
+  row: number,
+  col: number,
+  terrainGrid: TerrainType[][],
+  minGroundNeighbors: number = 4,
+): boolean {
+  // Check bounds
+  if (row < 0 || row >= terrainGrid.length || col < 0 || col >= terrainGrid[0]?.length) {
+    return false;
+  }
+
+  // Center tile must be ground
+  if (terrainGrid[row][col] !== "ground") {
+    return false;
+  }
+
+  // Count ground neighbors (8-directional)
+  let groundCount = 0;
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue; // Skip center tile
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr >= 0 && nr < terrainGrid.length && nc >= 0 && nc < terrainGrid[nr].length) {
+        if (terrainGrid[nr][nc] === "ground") {
+          groundCount++;
+        }
+      }
+    }
+  }
+
+  return groundCount >= minGroundNeighbors;
+}
+
+/**
  * Generate spawn points for all teams within the valid tile area.
  * Uses tile coordinates to ensure spawns are always on the map.
+ * Spawn points are placed on flat ground tiles with sufficient ground neighbors.
  *
  * @param dice - Deterministic dice for random generation
  * @param centerX - X coordinate of map center
  * @param gridSize - Size of the grid
  * @param numTeams - Number of teams to generate spawn points for
  * @param minDistance - Minimum distance between spawn points
+ * @param terrainGrid - 2D array of terrain types for spawn validation
  * @returns Array of spawn points, one per team
  */
 export function generateSpawnPoints(
@@ -256,6 +344,7 @@ export function generateSpawnPoints(
   gridSize: number,
   numTeams: number,
   minDistance: number,
+  terrainGrid: TerrainType[][],
 ): SpawnPoint[] {
   const spawns: SpawnPoint[] = [];
   const tileMargin = 10; // Stay this many tiles away from edges
@@ -263,18 +352,22 @@ export function generateSpawnPoints(
   for (let team = 0; team < numTeams; team++) {
     let attempts = 0;
     let worldX: number, worldY: number;
+    let row: number, col: number;
 
     do {
       // Generate random tile coordinates within bounds
-      const row = tileMargin + dice.roll(gridSize - 2 * tileMargin);
-      const col = tileMargin + dice.roll(gridSize - 2 * tileMargin);
+      row = tileMargin + dice.roll(gridSize - 2 * tileMargin);
+      col = tileMargin + dice.roll(gridSize - 2 * tileMargin);
 
-      // Convert to world coordinates
-      const world = tileToWorld(row, col, centerX);
+      // Convert to world coordinates (centered on tile)
+      const world = tileCenterToWorld(row, col, centerX);
       worldX = world.x;
       worldY = world.y;
       attempts++;
-    } while (!isFarEnough(worldX, worldY, spawns, minDistance) && attempts < 100);
+    } while (
+      (!isFarEnough(worldX, worldY, spawns, minDistance) || !isValidSpawnTile(row, col, terrainGrid)) &&
+      attempts < 100
+    );
 
     spawns.push({ x: worldX, y: worldY });
   }

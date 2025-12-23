@@ -27,9 +27,9 @@ export const TERRAIN_SHEETS: Record<TerrainType, string[]> = {
 
 // Terrain type weights (must sum to 100)
 export const TERRAIN_WEIGHTS: Record<TerrainType, number> = {
-  ground: 80, // 80%
-  mountain: 18, // 18%
-  rubyMountain: 2, //  2%
+  ground: 58,
+  mountain: 40,
+  rubyMountain: 2,
 };
 
 // Terrain types in order for weighted selection
