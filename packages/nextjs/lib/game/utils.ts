@@ -90,6 +90,7 @@ export function smoothTerrainGrid(grid: TerrainType[][], passNumber: number, see
         ground: 0,
         mountain: 0,
         liquid: 0,
+        mushroom: 0,
         rubyMountain: 0,
       };
 

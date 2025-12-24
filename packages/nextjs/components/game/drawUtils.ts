@@ -50,7 +50,7 @@ const DIRECTION_TO_FRAME: number[] = [
 // Liquid rendering constants (adjustable)
 export const LIQUID_COLOR = "#99f1f2";
 export const LIQUID_OPACITY = 0.6;
-export const LIQUID_Y_OFFSET = 5; // pixels lower than ground level
+export const LIQUID_Y_OFFSET = 10; // pixels lower than ground level
 
 // Liquid layer colors (bottom to top)
 export const LIQUID_LAYER_COLORS = [
@@ -61,7 +61,7 @@ export const LIQUID_LAYER_COLORS = [
 ];
 
 // Animation settings
-export const LIQUID_WAVE_AMPLITUDE = 3; // pixels of vertical movement
+export const LIQUID_WAVE_AMPLITUDE = 1.5; // pixels of vertical movement
 export const LIQUID_WAVE_SPEED = 0.001; // oscillation speed
 export const LIQUID_LAYER_SPACING = 4; // pixels between layers
 
@@ -238,8 +238,9 @@ export function createDrawables(
 
   // Add all agents to the drawable list
   // Apply depth offset so vehicles render on top of tiles at boundaries
+  // Use exact depth (no rounding) so vehicles sort correctly relative to each other
   for (let i = 0; i < agentPool.count; i++) {
-    const depth = worldToTileDepth(agentPool.x[i], agentPool.y[i], centerX) + VEHICLE_DEPTH_OFFSET;
+    const depth = worldToTileDepthExact(agentPool.x[i], agentPool.y[i], centerX) + VEHICLE_DEPTH_OFFSET;
     const agent: DrawableAgent = {
       type: "agent",
       depth,
@@ -334,6 +335,8 @@ export function drawTerrainDebug(
         ctx.fillStyle = "#00ff00"; // Green for ground
       } else if (terrain === "liquid") {
         ctx.fillStyle = "#00ffff"; // Cyan for liquid
+      } else if (terrain === "mushroom") {
+        ctx.fillStyle = "#7b68ee"; // Medium slate blue for mushroom
       } else if (terrain === "rubyMountain") {
         ctx.fillStyle = "#ff00ff"; // Magenta for ruby mountain
       } else {
@@ -526,6 +529,24 @@ function worldToTile(worldX: number, worldY: number, centerX: number): { row: nu
 export function worldToTileDepth(worldX: number, worldY: number, centerX: number): number {
   const { row, col } = worldToTile(worldX, worldY, centerX);
   return row + col;
+}
+
+/**
+ * Calculate exact isometric depth from world coordinates without rounding.
+ * Used for vehicle depth sorting to ensure proper layering between vehicles
+ * that are close together or within the same tile.
+ */
+export function worldToTileDepthExact(worldX: number, worldY: number, centerX: number): number {
+  const adjustedX = worldX - TILE_RENDER_WIDTH / 2;
+  const adjustedY = worldY - TILE_CENTER_Y_OFFSET;
+
+  const colMinusRow = (adjustedX - centerX) / TILE_X_SPACING;
+  const colPlusRow = adjustedY / TILE_Y_SPACING;
+
+  const col = (colMinusRow + colPlusRow) / 2;
+  const row = (colPlusRow - colMinusRow) / 2;
+
+  return row + col; // No rounding - exact position for smooth depth sorting
 }
 
 /**
