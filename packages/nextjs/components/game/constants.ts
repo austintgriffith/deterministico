@@ -15,7 +15,18 @@ export const DIRECTION_SPRITE_POS: [number, number][] = [
 // Vehicle sprite vertical offset (negative = up, positive = down)
 export const VEHICLE_Y_OFFSET = -30;
 
-// Flag depth offset for sorting
+// Vehicle depth offset for isometric sorting (higher = rendered later/on top)
+export const VEHICLE_DEPTH_OFFSET = 0.3;
+
+// Ground tile depth offset (negative so ground renders before vehicles)
+// This allows vehicles to render on top of ground tiles they're crossing
+// while still being occluded by mountains (which have no offset)
+export const GROUND_DEPTH_OFFSET = -1.0;
+
+// First sprite sheet index that is a mountain (ground sheets are 0-10, mountains are 11+)
+export const FIRST_MOUNTAIN_SHEET_INDEX = 11;
+
+// Flag depth offset for sorting (in pixels, used before depth conversion)
 export const FLAG_DEPTH_OFFSET = -25;
 
 // Zoom limits

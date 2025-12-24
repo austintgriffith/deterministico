@@ -294,8 +294,12 @@ export function updateCommsUnit(
     if (isWithinBounds(newX, newY, centerX, gridSize) && isTraversable(newX, newY, centerX, terrainGrid)) {
       x[index] = newX;
       y[index] = newY;
+    } else {
+      // Blocked by terrain/bounds - turn completely around and move away
+      direction[index] = (direction[index] + 2) % 4;
+      x[index] = myX + DIRECTION_DX[direction[index]] * moveSpeed;
+      y[index] = myY + DIRECTION_DY[direction[index]] * moveSpeed;
     }
-    // else: can't move to that position (out of bounds or non-ground terrain), stay in place
   }
   // else: forces balanced, stay still (in the sweet spot)
 }
@@ -341,8 +345,12 @@ export function updateNormalAgent(
     } else if (!withinBounds) {
       // Out of bounds - turn around
       direction[index] = (direction[index] + 2) % 4;
+    } else {
+      // Terrain not traversable (mountain) - turn completely around and move away
+      direction[index] = (direction[index] + 2) % 4;
+      x[index] = x[index] + DIRECTION_DX[direction[index]] * moveSpeed;
+      y[index] = y[index] + DIRECTION_DY[direction[index]] * moveSpeed;
     }
-    // else: terrain not traversable - stay in place (wait for next dice roll)
   } else if (action <= 12) {
     // Turn left: (dir + 3) % 4
     direction[index] = (direction[index] + 3) % 4;

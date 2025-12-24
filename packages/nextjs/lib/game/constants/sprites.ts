@@ -26,3 +26,12 @@ export const GRID_SIZE = 111; // 111x111 grid (odd number so there's a true cent
 // Legacy tile dimensions (used for map bounds calculations)
 export const TILE_WIDTH = TILE_RENDER_WIDTH;
 export const TILE_HEIGHT = TILE_RENDER_HEIGHT;
+
+// Per-frame x,y offsets for vehicle sprites (all vehicles use same offsets)
+// Frame index: 0=South, 1=East, 2=North, 3=West
+export const VEHICLE_FRAME_OFFSETS = [
+  { x: -37, y: 0 }, // Frame 0 (South)
+  { x: 20, y: 0 }, // Frame 1 (East)
+  { x: -23, y: 47 }, // Frame 2 (North)
+  { x: 10, y: 47 }, // Frame 3 (West)
+];

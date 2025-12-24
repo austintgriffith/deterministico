@@ -1,7 +1,14 @@
 /**
  * Drawing utility functions for the game renderer.
  */
-import { DIRECTION_SPRITE_POS, FLAG_DEPTH_OFFSET, VEHICLE_Y_OFFSET } from "./constants";
+import {
+  DIRECTION_SPRITE_POS,
+  FIRST_MOUNTAIN_SHEET_INDEX,
+  FLAG_DEPTH_OFFSET,
+  GROUND_DEPTH_OFFSET,
+  VEHICLE_DEPTH_OFFSET,
+  VEHICLE_Y_OFFSET,
+} from "./constants";
 import {
   AgentPool,
   SPRITE_SHEETS,
@@ -17,9 +24,28 @@ import {
   TILE_X_SPACING,
   TILE_Y_SPACING,
   TerrainType,
+  VEHICLE_FRAME_OFFSETS,
   VEHICLE_TYPES,
 } from "~~/lib/game";
-import type { Drawable, ImageCache, SpawnPoint, TileData } from "~~/lib/game";
+import type {
+  Drawable,
+  DrawableAgent,
+  DrawableFlag,
+  DrawableTile,
+  ImageCache,
+  SpawnPoint,
+  TileData,
+} from "~~/lib/game";
+
+// Direction to frame index mapping
+// Direction indices: 0=north, 1=east, 2=south, 3=west
+// Frame indices: 0=south, 1=east, 2=north, 3=west
+const DIRECTION_TO_FRAME: number[] = [
+  2, // north -> frame 2
+  1, // east -> frame 1
+  0, // south -> frame 0
+  3, // west -> frame 3
+];
 
 /**
  * Get the sprite key for a given vehicle type and team color
@@ -123,24 +149,98 @@ export function drawTiles(
 }
 
 /**
- * Create sorted drawable list for agents and flags
+ * Create depth-sorted drawable list for tiles, agents, and flags.
+ * Uses isometric depth (row + col) for proper occlusion ordering.
+ *
+ * @param grid - The tile data grid
+ * @param agentPool - The agent pool
+ * @param teamSpawnPoints - Flag spawn positions
+ * @param centerX - X center for coordinate conversion
+ * @param cameraX - Camera X position for culling
+ * @param cameraY - Camera Y position for culling
+ * @param visibleWidth - Visible viewport width
+ * @param visibleHeight - Visible viewport height
+ * @param buffer - Buffer around viewport for culling
  */
-export function createDrawables(agentPool: AgentPool, teamSpawnPoints: SpawnPoint[]): Drawable[] {
+export function createDrawables(
+  grid: TileData[][],
+  agentPool: AgentPool,
+  teamSpawnPoints: SpawnPoint[],
+  centerX: number,
+  startY: number,
+  cameraX: number,
+  cameraY: number,
+  visibleWidth: number,
+  visibleHeight: number,
+  buffer: number,
+): Drawable[] {
   const drawables: Drawable[] = [];
 
-  // Add all agents to the drawable list
-  for (let i = 0; i < agentPool.count; i++) {
-    drawables.push({ type: "agent", y: agentPool.y[i], index: i });
+  // Add visible tiles to the drawable list
+  for (let rowIndex = 0; rowIndex < grid.length; rowIndex++) {
+    const row = grid[rowIndex];
+    for (let colIndex = 0; colIndex < row.length; colIndex++) {
+      // Calculate tile position in world space
+      const worldX = centerX + (colIndex - rowIndex) * TILE_X_SPACING;
+      const worldY = startY + (colIndex + rowIndex) * TILE_Y_SPACING;
+
+      // Calculate screen position
+      const screenX = worldX - cameraX;
+      const screenY = worldY - cameraY;
+
+      // Viewport culling - skip tiles outside visible area
+      if (
+        screenX + TILE_RENDER_WIDTH < -buffer ||
+        screenX > visibleWidth + buffer ||
+        screenY + TILE_RENDER_HEIGHT < -buffer ||
+        screenY > visibleHeight + buffer
+      ) {
+        continue;
+      }
+
+      // Ground tiles get a negative offset so vehicles render on top of them
+      // Mountains keep their natural depth so they can occlude vehicles
+      const tileData = grid[rowIndex][colIndex];
+      const isGround = tileData.sheetIndex < FIRST_MOUNTAIN_SHEET_INDEX;
+      const tileDepth = rowIndex + colIndex + (isGround ? GROUND_DEPTH_OFFSET : 0);
+
+      const tile: DrawableTile = {
+        type: "tile",
+        depth: tileDepth,
+        row: rowIndex,
+        col: colIndex,
+      };
+      drawables.push(tile);
+    }
   }
 
-  // Add all flags to the drawable list (using their base Y position for sorting)
+  // Add all agents to the drawable list
+  // Apply depth offset so vehicles render on top of tiles at boundaries
+  for (let i = 0; i < agentPool.count; i++) {
+    const depth = worldToTileDepth(agentPool.x[i], agentPool.y[i], centerX) + VEHICLE_DEPTH_OFFSET;
+    const agent: DrawableAgent = {
+      type: "agent",
+      depth,
+      index: i,
+    };
+    drawables.push(agent);
+  }
+
+  // Add all flags to the drawable list
   for (let teamIndex = 0; teamIndex < teamSpawnPoints.length; teamIndex++) {
     const spawn = teamSpawnPoints[teamIndex];
-    drawables.push({ type: "flag", y: spawn.y + FLAG_DEPTH_OFFSET, index: teamIndex });
+    // Use spawn position with offset for depth calculation
+    const depth = worldToTileDepth(spawn.x, spawn.y + FLAG_DEPTH_OFFSET, centerX);
+    const flag: DrawableFlag = {
+      type: "flag",
+      depth,
+      index: teamIndex,
+    };
+    drawables.push(flag);
   }
 
-  // Sort by Y position (lower Y = further back = drawn first)
-  drawables.sort((a, b) => a.y - b.y);
+  // Sort by depth (lower depth = further back = drawn first)
+  drawables.sort((a, b) => a.depth - b.depth);
 
   return drawables;
 }
@@ -231,10 +331,10 @@ export function drawTerrainDebug(
 const VEHICLE_COLLISION_PADDING = 20;
 
 /**
- * Convert world coordinates to tile coordinates for debug display.
+ * Convert world coordinates to tile coordinates.
  * Must match the worldToTile function in simulation.ts exactly.
  */
-function debugWorldToTile(worldX: number, worldY: number, centerX: number): { row: number; col: number } {
+function worldToTile(worldX: number, worldY: number, centerX: number): { row: number; col: number } {
   const adjustedX = worldX - TILE_RENDER_WIDTH / 2;
   const adjustedY = worldY - TILE_CENTER_Y_OFFSET;
 
@@ -245,6 +345,16 @@ function debugWorldToTile(worldX: number, worldY: number, centerX: number): { ro
   const row = (colPlusRow - colMinusRow) / 2;
 
   return { row: Math.round(row), col: Math.round(col) };
+}
+
+/**
+ * Calculate isometric depth from world coordinates.
+ * Depth = row + col, used for painter's algorithm sorting.
+ * Higher depth = closer to camera = drawn later.
+ */
+export function worldToTileDepth(worldX: number, worldY: number, centerX: number): number {
+  const { row, col } = worldToTile(worldX, worldY, centerX);
+  return row + col;
 }
 
 /**
@@ -300,7 +410,7 @@ export function drawAgentDebugMarkers(
 
     // Show calculated tile coordinates and terrain type
     if (terrainGrid) {
-      const { row, col } = debugWorldToTile(agentPool.x[i], agentPool.y[i], centerX);
+      const { row, col } = worldToTile(agentPool.x[i], agentPool.y[i], centerX);
       const terrain =
         row >= 0 && row < terrainGrid.length && col >= 0 && col < terrainGrid[0].length ? terrainGrid[row][col] : "OOB";
 
@@ -315,21 +425,61 @@ export function drawAgentDebugMarkers(
 }
 
 /**
- * Draw all agents and flags in depth-sorted order
+ * Draw all tiles, agents, and flags in depth-sorted order.
+ * This is the main rendering function that properly handles isometric occlusion.
  */
-export function drawEntities(
+export function drawAllSorted(
   ctx: CanvasRenderingContext2D,
   drawables: Drawable[],
+  grid: TileData[][],
   agentPool: AgentPool,
   teamSpawnPoints: SpawnPoint[],
   cache: ImageCache,
+  centerX: number,
+  startY: number,
   cameraX: number,
   cameraY: number,
   visibleWidth: number,
   visibleHeight: number,
 ): void {
   for (const drawable of drawables) {
-    if (drawable.type === "flag") {
+    if (drawable.type === "tile") {
+      // Draw tile
+      const tileData = grid[drawable.row][drawable.col];
+
+      // Calculate tile position in world space
+      const worldX = centerX + (drawable.col - drawable.row) * TILE_X_SPACING;
+      const worldY = startY + (drawable.col + drawable.row) * TILE_Y_SPACING;
+
+      // Calculate screen position
+      const screenX = worldX - cameraX;
+      const screenY = worldY - cameraY;
+
+      // Get sprite sheet and draw
+      const sheetName = SPRITE_SHEETS[tileData.sheetIndex];
+      const sheetInfo = cache.spriteSheets.get(sheetName);
+      if (sheetInfo) {
+        // Calculate tile position within sprite sheet
+        const tileCol = tileData.tileIndex % SPRITE_SHEET_COLS;
+        const tileRow = Math.floor(tileData.tileIndex / SPRITE_SHEET_COLS);
+        const srcX = TILE_START_X + tileCol * TILE_STEP_X;
+        const srcY = TILE_START_Y + tileRow * TILE_STEP_Y;
+
+        // Draw tile from sprite sheet
+        ctx.drawImage(
+          sheetInfo.image,
+          srcX,
+          srcY,
+          TILE_RENDER_WIDTH,
+          TILE_RENDER_HEIGHT,
+          screenX,
+          screenY,
+          TILE_RENDER_WIDTH,
+          TILE_RENDER_HEIGHT,
+        );
+      }
+    } else if (drawable.type === "flag") {
+      // Draw flag
       const spawn = teamSpawnPoints[drawable.index];
       const flagScreenX = spawn.x - cameraX;
       const flagScreenY = spawn.y - cameraY;
@@ -340,7 +490,7 @@ export function drawEntities(
         const hexColor = TEAM_HEX_COLORS[teamColor];
         drawFlag(ctx, flagScreenX, flagScreenY, hexColor);
       }
-    } else {
+    } else if (drawable.type === "agent") {
       // Draw agent
       const i = drawable.index;
       const screenX = agentPool.x[i] - 32 - cameraX;
@@ -357,14 +507,19 @@ export function drawEntities(
           const sx = col * spriteInfo.frameWidth;
           const sy = row * spriteInfo.frameHeight;
 
+          // Apply per-frame offset from calibration (scaled to render size)
+          const frameIndex = DIRECTION_TO_FRAME[dir];
+          const frameOffset = VEHICLE_FRAME_OFFSETS[frameIndex];
+          const renderScale = 64 / spriteInfo.frameWidth;
+
           ctx.drawImage(
             spriteInfo.image,
             sx,
             sy,
             spriteInfo.frameWidth,
             spriteInfo.frameHeight,
-            screenX,
-            screenY,
+            screenX + frameOffset.x * renderScale,
+            screenY + frameOffset.y * renderScale,
             64,
             64,
           );

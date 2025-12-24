@@ -4,9 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createDrawables,
   drawAgentDebugMarkers,
-  drawEntities,
+  drawAllSorted,
   drawTerrainDebug,
-  drawTiles,
   useCamera,
   useImageLoader,
 } from "./game";
@@ -140,17 +139,38 @@ export function GameRenderer({
     const visibleWidth = viewportWidth / zoom;
     const visibleHeight = viewportHeight / zoom;
 
-    // Draw tiles
-    drawTiles(ctx, grid, cache, centerX, startY, camera.x, camera.y, visibleWidth, visibleHeight, buffer);
+    // Create depth-sorted drawables (tiles, agents, flags) and draw everything
+    const drawables = createDrawables(
+      grid,
+      agentPool,
+      teamSpawnPoints,
+      centerX,
+      startY,
+      camera.x,
+      camera.y,
+      visibleWidth,
+      visibleHeight,
+      buffer,
+    );
+    drawAllSorted(
+      ctx,
+      drawables,
+      grid,
+      agentPool,
+      teamSpawnPoints,
+      cache,
+      centerX,
+      startY,
+      camera.x,
+      camera.y,
+      visibleWidth,
+      visibleHeight,
+    );
 
     // Draw debug terrain overlay if enabled
     if (debugMode && terrainGrid) {
       drawTerrainDebug(ctx, terrainGrid, centerX, startY, camera.x, camera.y, visibleWidth, visibleHeight, buffer);
     }
-
-    // Create depth-sorted drawables and draw entities
-    const drawables = createDrawables(agentPool, teamSpawnPoints);
-    drawEntities(ctx, drawables, agentPool, teamSpawnPoints, cache, camera.x, camera.y, visibleWidth, visibleHeight);
 
     // Draw debug agent markers if enabled
     if (debugMode) {

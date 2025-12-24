@@ -79,18 +79,26 @@ export type PinchState = {
 
 /**
  * Drawable types for depth sorting.
+ * All drawables have a depth value (row + col) for isometric sorting.
  */
 
 export type DrawableAgent = {
   type: "agent";
-  y: number;
+  depth: number; // row + col for isometric sorting
   index: number;
 };
 
 export type DrawableFlag = {
   type: "flag";
-  y: number;
+  depth: number; // row + col for isometric sorting
   index: number;
 };
 
-export type Drawable = DrawableAgent | DrawableFlag;
+export type DrawableTile = {
+  type: "tile";
+  depth: number; // row + col for isometric sorting
+  row: number;
+  col: number;
+};
+
+export type Drawable = DrawableAgent | DrawableFlag | DrawableTile;
