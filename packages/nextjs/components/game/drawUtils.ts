@@ -47,6 +47,28 @@ const DIRECTION_TO_FRAME: number[] = [
   3, // west -> frame 3
 ];
 
+// Liquid rendering constants (adjustable)
+export const LIQUID_COLOR = "#99f1f2";
+export const LIQUID_OPACITY = 0.6;
+export const LIQUID_Y_OFFSET = 5; // pixels lower than ground level
+
+// Liquid layer colors (bottom to top)
+export const LIQUID_LAYER_COLORS = [
+  "#91ccda", // deepest (base layer, drawn under all tiles)
+  "#8ee9e7",
+  "#92e8e9",
+  "#99f1f2", // top
+];
+
+// Animation settings
+export const LIQUID_WAVE_AMPLITUDE = 3; // pixels of vertical movement
+export const LIQUID_WAVE_SPEED = 0.001; // oscillation speed
+export const LIQUID_LAYER_SPACING = 4; // pixels between layers
+
+// Edge masking constants
+export const EDGE_TILE_COLOR = "#000000"; // Black edge tiles to mask overflow
+export const EDGE_BORDER_DEPTH = 2; // How many tiles deep the border extends
+
 /**
  * Get the sprite key for a given vehicle type and team color
  */
@@ -310,6 +332,8 @@ export function drawTerrainDebug(
       // Color based on terrain type
       if (terrain === "ground") {
         ctx.fillStyle = "#00ff00"; // Green for ground
+      } else if (terrain === "liquid") {
+        ctx.fillStyle = "#00ffff"; // Cyan for liquid
       } else if (terrain === "rubyMountain") {
         ctx.fillStyle = "#ff00ff"; // Magenta for ruby mountain
       } else {
@@ -325,6 +349,153 @@ export function drawTerrainDebug(
   }
 
   ctx.restore();
+}
+
+/**
+ * Draw the base liquid layer (opaque, no animation).
+ * This is drawn under EVERY tile so transparency in tile sprites shows liquid color.
+ */
+export function drawLiquidBase(ctx: CanvasRenderingContext2D, screenX: number, screenY: number): void {
+  const diamondCenterX = screenX + TILE_RENDER_WIDTH / 2;
+  const baseCenterY = screenY + TILE_CENTER_Y_OFFSET + LIQUID_Y_OFFSET + 2; // Bottom layer offset
+
+  const halfWidth = TILE_X_SPACING;
+  const halfHeight = TILE_Y_SPACING;
+
+  ctx.fillStyle = LIQUID_LAYER_COLORS[0]; // Bottom layer color (opaque)
+
+  ctx.beginPath();
+  ctx.moveTo(diamondCenterX, baseCenterY - halfHeight);
+  ctx.lineTo(diamondCenterX + halfWidth, baseCenterY);
+  ctx.lineTo(diamondCenterX, baseCenterY + halfHeight);
+  ctx.lineTo(diamondCenterX - halfWidth, baseCenterY);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * Draw animated liquid layers (transparent, on top of liquid tiles only).
+ * The base layer is drawn separately under all tiles.
+ */
+export function drawLiquidTile(ctx: CanvasRenderingContext2D, screenX: number, screenY: number, time: number): void {
+  const diamondCenterX = screenX + TILE_RENDER_WIDTH / 2;
+  const baseCenterY = screenY + TILE_CENTER_Y_OFFSET + LIQUID_Y_OFFSET;
+
+  const halfWidth = TILE_X_SPACING;
+  const halfHeight = TILE_Y_SPACING;
+
+  ctx.save();
+
+  // Draw only the animated transparent layers (skip bottom layer - it's drawn for all tiles)
+  const layerOffsets = [2, 0, -2, -4]; // bottom, lower-mid, upper-mid, top (close together near surface)
+  for (let i = 1; i < LIQUID_LAYER_COLORS.length; i++) {
+    // Calculate animated Y offset using sine wave
+    const waveOffset = Math.sin(time * LIQUID_WAVE_SPEED + i * 0.5) * LIQUID_WAVE_AMPLITUDE;
+    const depthOffset = layerOffsets[i] ?? 0;
+    const layerCenterY = baseCenterY + depthOffset + waveOffset;
+
+    // Transparent layers
+    const layerOpacity = 0.3 + (i / (LIQUID_LAYER_COLORS.length - 1)) * 0.2;
+
+    ctx.globalAlpha = layerOpacity;
+    ctx.fillStyle = LIQUID_LAYER_COLORS[i];
+
+    ctx.beginPath();
+    ctx.moveTo(diamondCenterX, layerCenterY - halfHeight);
+    ctx.lineTo(diamondCenterX + halfWidth, layerCenterY);
+    ctx.lineTo(diamondCenterX, layerCenterY + halfHeight);
+    ctx.lineTo(diamondCenterX - halfWidth, layerCenterY);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Subtle edge highlight on top layer
+  ctx.globalAlpha = 0.3;
+  ctx.strokeStyle = "#5ad8d9";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/**
+ * Pre-calculated tile center Y offset for edge tiles.
+ * Uses the same offset as debug drawing for consistency.
+ */
+const EDGE_TILE_CENTER_Y_OFFSET = (TILE_START_Y * TILE_RENDER_HEIGHT) / TILE_STEP_Y + TILE_Y_SPACING;
+
+/**
+ * Draw black edge tiles around the map border to mask liquid overflow.
+ * These tiles are drawn at the same height as the water surface.
+ */
+export function drawEdgeTiles(
+  ctx: CanvasRenderingContext2D,
+  gridSize: number,
+  centerX: number,
+  startY: number,
+  cameraX: number,
+  cameraY: number,
+  visibleWidth: number,
+  visibleHeight: number,
+  buffer: number,
+): void {
+  const halfWidth = TILE_X_SPACING;
+  const halfHeight = TILE_Y_SPACING;
+
+  // Helper to draw a single black diamond tile
+  const drawBlackTile = (row: number, col: number) => {
+    const worldX = centerX + (col - row) * TILE_X_SPACING;
+    const worldY = startY + (col + row) * TILE_Y_SPACING;
+
+    const screenX = worldX - cameraX;
+    const screenY = worldY - cameraY;
+
+    // Viewport culling
+    if (
+      screenX + TILE_RENDER_WIDTH < -buffer ||
+      screenX > visibleWidth + buffer ||
+      screenY + TILE_RENDER_HEIGHT < -buffer ||
+      screenY > visibleHeight + buffer
+    ) {
+      return;
+    }
+
+    // Calculate diamond center at water surface height
+    const diamondCenterX = screenX + TILE_RENDER_WIDTH / 2;
+    const diamondCenterY = screenY + EDGE_TILE_CENTER_Y_OFFSET + LIQUID_Y_OFFSET;
+
+    ctx.fillStyle = EDGE_TILE_COLOR;
+    ctx.beginPath();
+    ctx.moveTo(diamondCenterX, diamondCenterY - halfHeight);
+    ctx.lineTo(diamondCenterX + halfWidth, diamondCenterY);
+    ctx.lineTo(diamondCenterX, diamondCenterY + halfHeight);
+    ctx.lineTo(diamondCenterX - halfWidth, diamondCenterY);
+    ctx.closePath();
+    ctx.fill();
+  };
+
+  // Draw edge tiles around all four sides (multiple rows deep for coverage)
+  for (let depth = 1; depth <= EDGE_BORDER_DEPTH; depth++) {
+    // North edge (row = -depth, all columns)
+    for (let col = -depth; col < gridSize + depth; col++) {
+      drawBlackTile(-depth, col);
+    }
+
+    // South edge (row = gridSize + depth - 1, all columns)
+    for (let col = -depth; col < gridSize + depth; col++) {
+      drawBlackTile(gridSize + depth - 1, col);
+    }
+
+    // West edge (col = -depth, all rows except corners already drawn)
+    for (let row = -depth + 1; row < gridSize + depth - 1; row++) {
+      drawBlackTile(row, -depth);
+    }
+
+    // East edge (col = gridSize + depth - 1, all rows except corners already drawn)
+    for (let row = -depth + 1; row < gridSize + depth - 1; row++) {
+      drawBlackTile(row, gridSize + depth - 1);
+    }
+  }
 }
 
 /** Must match VEHICLE_COLLISION_PADDING in simulation.ts */
@@ -427,11 +598,13 @@ export function drawAgentDebugMarkers(
 /**
  * Draw all tiles, agents, and flags in depth-sorted order.
  * This is the main rendering function that properly handles isometric occlusion.
+ * Liquid tiles (sheetIndex === -1) are rendered as colored diamonds instead of sprites.
  */
 export function drawAllSorted(
   ctx: CanvasRenderingContext2D,
   drawables: Drawable[],
   grid: TileData[][],
+  terrainGrid: TerrainType[][] | undefined,
   agentPool: AgentPool,
   teamSpawnPoints: SpawnPoint[],
   cache: ImageCache,
@@ -441,6 +614,7 @@ export function drawAllSorted(
   cameraY: number,
   visibleWidth: number,
   visibleHeight: number,
+  time: number, // Animation time in ms for liquid effects
 ): void {
   for (const drawable of drawables) {
     if (drawable.type === "tile") {
@@ -455,28 +629,37 @@ export function drawAllSorted(
       const screenX = worldX - cameraX;
       const screenY = worldY - cameraY;
 
-      // Get sprite sheet and draw
-      const sheetName = SPRITE_SHEETS[tileData.sheetIndex];
-      const sheetInfo = cache.spriteSheets.get(sheetName);
-      if (sheetInfo) {
-        // Calculate tile position within sprite sheet
-        const tileCol = tileData.tileIndex % SPRITE_SHEET_COLS;
-        const tileRow = Math.floor(tileData.tileIndex / SPRITE_SHEET_COLS);
-        const srcX = TILE_START_X + tileCol * TILE_STEP_X;
-        const srcY = TILE_START_Y + tileRow * TILE_STEP_Y;
+      // Draw liquid base under EVERY tile (so transparency shows liquid color)
+      drawLiquidBase(ctx, screenX, screenY);
 
-        // Draw tile from sprite sheet
-        ctx.drawImage(
-          sheetInfo.image,
-          srcX,
-          srcY,
-          TILE_RENDER_WIDTH,
-          TILE_RENDER_HEIGHT,
-          screenX,
-          screenY,
-          TILE_RENDER_WIDTH,
-          TILE_RENDER_HEIGHT,
-        );
+      // Check if this is a liquid tile (sheetIndex === -1 means no sprite)
+      if (tileData.sheetIndex === -1) {
+        // Draw animated transparent liquid layers on top
+        drawLiquidTile(ctx, screenX, screenY, time);
+      } else {
+        // Get sprite sheet and draw on top of liquid base
+        const sheetName = SPRITE_SHEETS[tileData.sheetIndex];
+        const sheetInfo = cache.spriteSheets.get(sheetName);
+        if (sheetInfo) {
+          // Calculate tile position within sprite sheet
+          const tileCol = tileData.tileIndex % SPRITE_SHEET_COLS;
+          const tileRow = Math.floor(tileData.tileIndex / SPRITE_SHEET_COLS);
+          const srcX = TILE_START_X + tileCol * TILE_STEP_X;
+          const srcY = TILE_START_Y + tileRow * TILE_STEP_Y;
+
+          // Draw tile from sprite sheet
+          ctx.drawImage(
+            sheetInfo.image,
+            srcX,
+            srcY,
+            TILE_RENDER_WIDTH,
+            TILE_RENDER_HEIGHT,
+            screenX,
+            screenY,
+            TILE_RENDER_WIDTH,
+            TILE_RENDER_HEIGHT,
+          );
+        }
       }
     } else if (drawable.type === "flag") {
       // Draw flag

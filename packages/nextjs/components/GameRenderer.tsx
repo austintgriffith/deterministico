@@ -5,6 +5,7 @@ import {
   createDrawables,
   drawAgentDebugMarkers,
   drawAllSorted,
+  drawEdgeTiles,
   drawTerrainDebug,
   useCamera,
   useImageLoader,
@@ -156,6 +157,7 @@ export function GameRenderer({
       ctx,
       drawables,
       grid,
+      terrainGrid,
       agentPool,
       teamSpawnPoints,
       cache,
@@ -165,7 +167,11 @@ export function GameRenderer({
       camera.y,
       visibleWidth,
       visibleHeight,
+      performance.now(), // Animation time for liquid effects
     );
+
+    // Draw black edge tiles to mask liquid overflow on east/south edges
+    drawEdgeTiles(ctx, GRID_SIZE, centerX, startY, camera.x, camera.y, visibleWidth, visibleHeight, buffer);
 
     // Draw debug terrain overlay if enabled
     if (debugMode && terrainGrid) {

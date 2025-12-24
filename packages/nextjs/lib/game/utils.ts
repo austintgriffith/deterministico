@@ -89,6 +89,7 @@ export function smoothTerrainGrid(grid: TerrainType[][], passNumber: number, see
       const counts: Record<TerrainType, number> = {
         ground: 0,
         mountain: 0,
+        liquid: 0,
         rubyMountain: 0,
       };
 
@@ -193,6 +194,13 @@ export function generateGrid(roll: `0x${string}`, gridSize: number): GridData {
 
       // Get available sheets for this terrain type
       const availableSheets = TERRAIN_SHEETS[terrainType];
+
+      // Handle terrain types with no sprite sheets (e.g., liquid)
+      if (availableSheets.length === 0) {
+        // Use -1 as marker for "no sprite" - renderer will draw colored overlay
+        rowTiles.push({ sheetIndex: -1, tileIndex: 0 });
+        continue;
+      }
 
       // Use deterministic hash to select sheet and tile
       const sheetHash = hash(row + 2000, col + 2000, seed);

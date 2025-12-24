@@ -4,9 +4,10 @@
  */
 
 // Terrain type system
-export type TerrainType = "ground" | "mountain" | "rubyMountain";
 
-// Sprite sheets organized by terrain type
+export type TerrainType = "ground" | "mountain" | "liquid" | "rubyMountain";
+
+// Sprite sheets organized by terrain type (liquid has no sprites - rendered as colored diamond)
 export const TERRAIN_SHEETS: Record<TerrainType, string[]> = {
   ground: [
     "ground_tiles_00",
@@ -21,19 +22,21 @@ export const TERRAIN_SHEETS: Record<TerrainType, string[]> = {
     "ground_tiles_09",
     "ground_tiles_10",
   ],
-  mountain: ["mountain_tiles_1", "mountain_tiles_2", "mountain_tiles_3"],
+  mountain: ["mountain_tiles_1", "mountain_tiles_2", "mountain_tiles_3", "mountain_tiles_4"],
+  liquid: [], // No sprite sheets - rendered as colored diamond
   rubyMountain: ["rubymountain_tiles_01"],
 };
 
 // Terrain type weights (must sum to 100)
 export const TERRAIN_WEIGHTS: Record<TerrainType, number> = {
   ground: 58,
-  mountain: 40,
+  mountain: 20,
+  liquid: 20,
   rubyMountain: 2,
 };
 
 // Terrain types in order for weighted selection
-export const TERRAIN_TYPES: TerrainType[] = ["ground", "mountain", "rubyMountain"];
+export const TERRAIN_TYPES: TerrainType[] = ["ground", "mountain", "liquid", "rubyMountain"];
 
 // All available sprite sheets (flattened for loading)
 export const SPRITE_SHEETS = [
