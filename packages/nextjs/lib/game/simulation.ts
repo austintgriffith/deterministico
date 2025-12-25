@@ -96,9 +96,6 @@ export function isWithinBounds(worldX: number, worldY: number, centerX: number, 
   return row >= margin && row < gridSize - margin && col >= margin && col < gridSize - margin;
 }
 
-/** Padding around vehicle collision point in pixels */
-const VEHICLE_COLLISION_PADDING = 32;
-
 /**
  * Check if a single point is on ground terrain.
  */
@@ -117,14 +114,14 @@ function isPointOnGround(worldX: number, worldY: number, centerX: number, terrai
 /**
  * Check if a world position is on traversable terrain (ground tiles only).
  * Agents can only drive on "ground" tiles.
- * Checks multiple points around the position with padding to prevent
- * vehicles from getting too close to mountain tile edges.
+ * Uses center-point-only collision for simplicity and to avoid shape mismatch
+ * issues with isometric tile geometry.
  *
  * @param worldX - World X coordinate
  * @param worldY - World Y coordinate
  * @param centerX - X coordinate of map center
  * @param terrainGrid - 2D array of terrain types
- * @returns true if position is traversable (all padded points on ground)
+ * @returns true if position is traversable (center point on ground)
  */
 export function isTraversable(
   worldX: number,
@@ -138,36 +135,8 @@ export function isTraversable(
     return false;
   }
 
-  // Check center point
-  if (!isPointOnGround(worldX, worldY, centerX, terrainGrid)) {
-    return false;
-  }
-
-  // Check padded points in cardinal directions (N, E, S, W)
-  // This creates a collision "circle" around the vehicle
-  const pad = VEHICLE_COLLISION_PADDING;
-
-  // North (isometric: dx positive, dy negative)
-  if (!isPointOnGround(worldX + pad, worldY - pad / 2, centerX, terrainGrid)) {
-    return false;
-  }
-
-  // East (isometric: dx positive, dy positive)
-  if (!isPointOnGround(worldX + pad, worldY + pad / 2, centerX, terrainGrid)) {
-    return false;
-  }
-
-  // South (isometric: dx negative, dy positive)
-  if (!isPointOnGround(worldX - pad, worldY + pad / 2, centerX, terrainGrid)) {
-    return false;
-  }
-
-  // West (isometric: dx negative, dy negative)
-  if (!isPointOnGround(worldX - pad, worldY - pad / 2, centerX, terrainGrid)) {
-    return false;
-  }
-
-  return true;
+  // Check center point only - simpler and avoids shape mismatch issues
+  return isPointOnGround(worldX, worldY, centerX, terrainGrid);
 }
 
 /**

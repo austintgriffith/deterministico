@@ -520,9 +520,6 @@ export function drawEdgeTiles(
   }
 }
 
-/** Must match VEHICLE_COLLISION_PADDING in simulation.ts */
-const VEHICLE_COLLISION_PADDING = 32;
-
 /**
  * Convert world coordinates to tile coordinates.
  * Must match the worldToTile function in simulation.ts exactly.
@@ -594,29 +591,14 @@ export function drawAgentDebugMarkers(
       continue;
     }
 
-    // Draw the collision padding area as an isometric diamond
-    const pad = VEHICLE_COLLISION_PADDING;
+    // Draw a small crosshair at agent's exact center position (collision point)
     ctx.strokeStyle = "#ffff00"; // Yellow
     ctx.lineWidth = 2;
-
     ctx.beginPath();
-    // North point (dx positive, dy negative)
-    ctx.moveTo(screenX + pad, screenY - pad / 2);
-    // East point (dx positive, dy positive)
-    ctx.lineTo(screenX + pad, screenY + pad / 2);
-    // South point (dx negative, dy positive)
-    ctx.lineTo(screenX - pad, screenY + pad / 2);
-    // West point (dx negative, dy negative)
-    ctx.lineTo(screenX - pad, screenY - pad / 2);
-    ctx.closePath();
-    ctx.stroke();
-
-    // Draw a small crosshair at agent's exact center position
-    ctx.beginPath();
-    ctx.moveTo(screenX - 4, screenY);
-    ctx.lineTo(screenX + 4, screenY);
-    ctx.moveTo(screenX, screenY - 4);
-    ctx.lineTo(screenX, screenY + 4);
+    ctx.moveTo(screenX - 8, screenY);
+    ctx.lineTo(screenX + 8, screenY);
+    ctx.moveTo(screenX, screenY - 8);
+    ctx.lineTo(screenX, screenY + 8);
     ctx.stroke();
 
     // Show calculated tile coordinates and terrain type
