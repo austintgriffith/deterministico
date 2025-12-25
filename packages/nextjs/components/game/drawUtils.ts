@@ -792,6 +792,10 @@ export function drawMinimap(
   // Calculate how much world space the minimap covers
   const minimapWorldRadius = MINIMAP_SIZE / 2 / MINIMAP_SCALE;
 
+  // Rotation factor for converting isometric to top-down (45 degrees)
+  // In isometric view, North points to top-right. We rotate coords so North is up.
+  const ISO_TO_TOPDOWN = Math.SQRT1_2; // 1/sqrt(2) ≈ 0.707
+
   // Draw each agent on the minimap
   for (let i = 0; i < agentPool.count; i++) {
     const agentWorldX = agentPool.x[i];
@@ -805,9 +809,12 @@ export function drawMinimap(
     const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
     if (distance > minimapWorldRadius * 1.2) continue;
 
-    // Convert world offset to minimap coordinates
-    const minimapAgentX = minimapCenterX + offsetX * MINIMAP_SCALE;
-    const minimapAgentY = minimapCenterY + offsetY * MINIMAP_SCALE;
+    // Convert isometric world offset to top-down minimap coordinates
+    // Rotate 45 degrees so that North (top-right in isometric) becomes up
+    const rotatedX = (offsetX + offsetY) * ISO_TO_TOPDOWN;
+    const rotatedY = (offsetY - offsetX) * ISO_TO_TOPDOWN;
+    const minimapAgentX = minimapCenterX + rotatedX * MINIMAP_SCALE;
+    const minimapAgentY = minimapCenterY + rotatedY * MINIMAP_SCALE;
 
     // Get the vehicle sprite
     const spriteKey = getSpriteKey(agentPool.vehicleType[i], agentPool.team[i]);
@@ -819,6 +826,7 @@ export function drawMinimap(
       const sy = TOP_VIEW_SPRITE_ROW * spriteInfo.frameHeight;
 
       // Get rotation based on direction
+      // Since we rotated the coordinate system 45 degrees, sprite rotation is adjusted
       const direction = agentPool.direction[i];
       const rotation = DIRECTION_TO_ROTATION[direction];
 
@@ -848,20 +856,23 @@ export function drawMinimap(
   ctx.textAlign = "center";
   ctx.fillText("N", minimapCenterX, minimapY + 12);
 
-  // Draw viewport rectangle indicator (shows current camera view area)
+  // Draw viewport indicator as a rotated diamond (since we rotated coords 45 degrees)
+  // The viewport rectangle in isometric space becomes a diamond in top-down space
   const viewportWorldWidth = viewportWidth / zoom;
   const viewportWorldHeight = viewportHeight / zoom;
-  const viewportMinimapWidth = viewportWorldWidth * MINIMAP_SCALE;
-  const viewportMinimapHeight = viewportWorldHeight * MINIMAP_SCALE;
+  const halfW = (viewportWorldWidth / 2) * MINIMAP_SCALE * ISO_TO_TOPDOWN;
+  const halfH = (viewportWorldHeight / 2) * MINIMAP_SCALE * ISO_TO_TOPDOWN;
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
   ctx.lineWidth = 1;
-  ctx.strokeRect(
-    minimapCenterX - viewportMinimapWidth / 2,
-    minimapCenterY - viewportMinimapHeight / 2,
-    viewportMinimapWidth,
-    viewportMinimapHeight,
-  );
+  ctx.beginPath();
+  // Diamond shape: top, right, bottom, left
+  ctx.moveTo(minimapCenterX, minimapCenterY - halfW - halfH); // Top
+  ctx.lineTo(minimapCenterX + halfW + halfH, minimapCenterY); // Right
+  ctx.lineTo(minimapCenterX, minimapCenterY + halfW + halfH); // Bottom
+  ctx.lineTo(minimapCenterX - halfW - halfH, minimapCenterY); // Left
+  ctx.closePath();
+  ctx.stroke();
 
   ctx.restore();
 }
