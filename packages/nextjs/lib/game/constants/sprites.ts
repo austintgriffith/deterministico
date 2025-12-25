@@ -28,10 +28,13 @@ export const TILE_WIDTH = TILE_RENDER_WIDTH;
 export const TILE_HEIGHT = TILE_RENDER_HEIGHT;
 
 // Per-frame x,y offsets for vehicle sprites (all vehicles use same offsets)
-// Frame index: 0=South, 1=East, 2=North, 3=West
+// Frames 0-3: Directional (used in game rendering)
+// Frames 4-5: UI only (Top/Side views for menus, tooltips, etc.)
 export const VEHICLE_FRAME_OFFSETS = [
-  { x: -37, y: 0 }, // Frame 0 (South)
-  { x: 20, y: 0 }, // Frame 1 (East)
-  { x: -23, y: 47 }, // Frame 2 (North)
-  { x: 10, y: 47 }, // Frame 3 (West)
+  { x: -21, y: -4 }, // Frame 0 (South)
+  { x: -32, y: -3 }, // Frame 1 (East)
+  { x: -30, y: 26 }, // Frame 2 (North)
+  { x: -15, y: 28 }, // Frame 3 (West)
+  { x: -8, y: -44 }, // Frame 4 (Top - UI only)
+  { x: -1, y: -11 }, // Frame 5 (Side - UI only)
 ];

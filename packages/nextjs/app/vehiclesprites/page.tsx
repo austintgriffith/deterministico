@@ -3,16 +3,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { TEAM_COLORS, VEHICLE_FRAME_OFFSETS, VEHICLE_TYPES } from "~~/lib/game";
 
-// Frame labels corresponding to directions
-const FRAME_LABELS = ["South", "East", "North", "West"];
+// Frame labels corresponding to directions and UI views
+// Frames 0-3: Directional (used in game)
+// Frames 4-5: UI only (Top/Side views for menus, tooltips, etc.)
+const FRAME_LABELS = ["South", "East", "North", "West", "Top", "Side"];
 
 // Frame to sprite grid position: frame index -> [col, row]
+// Sprite sheet is now 3 columns x 2 rows
 const FRAME_POSITIONS: [number, number][] = [
   [0, 0], // Frame 0 = South
   [1, 0], // Frame 1 = East
   [0, 1], // Frame 2 = North
   [1, 1], // Frame 3 = West
+  [2, 0], // Frame 4 = Top (UI only)
+  [2, 1], // Frame 5 = Side (UI only)
 ];
+
+// Number of directional frames (for animation)
+const DIRECTIONAL_FRAMES = 4;
+// Total number of frames
+const TOTAL_FRAMES = 6;
 
 // Preview size for vehicle sprite (container size)
 const PREVIEW_SIZE = 128;
@@ -30,7 +40,15 @@ export default function VehicleSpritesPage() {
   const [currentFrame, setCurrentFrame] = useState(0);
 
   // Per-frame offsets (global for all vehicles) - initialized from constants
-  const [frameOffsets, setFrameOffsets] = useState(() => VEHICLE_FRAME_OFFSETS.map(offset => ({ ...offset })));
+  // Ensure we have 6 entries (extend with defaults if constants only has 4)
+  const [frameOffsets, setFrameOffsets] = useState(() => {
+    const offsets = VEHICLE_FRAME_OFFSETS.map(offset => ({ ...offset }));
+    // Add default offsets for Top and Side views if not present
+    while (offsets.length < TOTAL_FRAMES) {
+      offsets.push({ x: 0, y: 0 });
+    }
+    return offsets;
+  });
 
   // Vehicle sprite image state
   const [vehicleImage, setVehicleImage] = useState<HTMLImageElement | null>(null);
@@ -45,17 +63,18 @@ export default function VehicleSpritesPage() {
     const img = new Image();
     img.onload = () => {
       setVehicleImage(img);
-      setFrameWidth(img.naturalWidth / 2);
+      // Sprite sheet is 3 columns x 2 rows
+      setFrameWidth(img.naturalWidth / 3);
       setFrameHeight(img.naturalHeight / 2);
     };
     img.src = `/vehicles/${selectedVehicle}_${selectedTeam}.png`;
   }, [selectedVehicle, selectedTeam]);
 
-  // Animation effect
+  // Animation effect - only cycles through directional frames (0-3)
   useEffect(() => {
     if (!isAnimating) return;
     const interval = setInterval(() => {
-      setCurrentFrame(prev => (prev + 1) % 4);
+      setCurrentFrame(prev => (prev + 1) % DIRECTIONAL_FRAMES);
     }, 500);
     return () => clearInterval(interval);
   }, [isAnimating]);
@@ -116,15 +135,15 @@ export default function VehicleSpritesPage() {
             break;
         }
       } else {
-        // Arrows without shift: navigate frames
+        // Arrows without shift: navigate frames (all 6 frames)
         switch (e.key) {
           case "ArrowLeft":
             e.preventDefault();
-            setCurrentFrame(prev => (prev - 1 + 4) % 4);
+            setCurrentFrame(prev => (prev - 1 + TOTAL_FRAMES) % TOTAL_FRAMES);
             break;
           case "ArrowRight":
             e.preventDefault();
-            setCurrentFrame(prev => (prev + 1) % 4);
+            setCurrentFrame(prev => (prev + 1) % TOTAL_FRAMES);
             break;
         }
       }
@@ -141,19 +160,27 @@ export default function VehicleSpritesPage() {
   // Copy configuration to clipboard
   const copyConfig = () => {
     const data = `// Per-frame x,y offsets for vehicle sprites (all vehicles use same offsets)
-// Frame index: 0=South, 1=East, 2=North, 3=West
+// Frames 0-3: Directional (used in game rendering)
+// Frames 4-5: UI only (Top/Side views for menus, tooltips, etc.)
 export const VEHICLE_FRAME_OFFSETS = [
   { x: ${frameOffsets[0].x}, y: ${frameOffsets[0].y} }, // Frame 0 (South)
   { x: ${frameOffsets[1].x}, y: ${frameOffsets[1].y} }, // Frame 1 (East)
   { x: ${frameOffsets[2].x}, y: ${frameOffsets[2].y} }, // Frame 2 (North)
   { x: ${frameOffsets[3].x}, y: ${frameOffsets[3].y} }, // Frame 3 (West)
+  { x: ${frameOffsets[4].x}, y: ${frameOffsets[4].y} }, // Frame 4 (Top - UI only)
+  { x: ${frameOffsets[5].x}, y: ${frameOffsets[5].y} }, // Frame 5 (Side - UI only)
 ];`;
     navigator.clipboard.writeText(data);
   };
 
   // Reset offsets to saved constants
   const resetOffsets = () => {
-    setFrameOffsets(VEHICLE_FRAME_OFFSETS.map(offset => ({ ...offset })));
+    const offsets = VEHICLE_FRAME_OFFSETS.map(offset => ({ ...offset }));
+    // Add default offsets for Top and Side views if not present
+    while (offsets.length < TOTAL_FRAMES) {
+      offsets.push({ x: 0, y: 0 });
+    }
+    setFrameOffsets(offsets);
   };
 
   // Get current frame position
@@ -298,20 +325,21 @@ export const VEHICLE_FRAME_OFFSETS = [
                 </div>
               </div>
 
-              {/* All 4 Frames Grid */}
+              {/* All 6 Frames Grid (3x2) */}
               <div>
                 <h2 className="text-lg font-semibold mb-2">All Frames</h2>
                 <div className="bg-gray-800 p-3 rounded">
-                  <div className="grid grid-cols-4 gap-2">
-                    {[0, 1, 2, 3].map(frameIndex => {
+                  <div className="grid grid-cols-3 gap-2">
+                    {[0, 1, 4, 2, 3, 5].map(frameIndex => {
                       const [col, row] = FRAME_POSITIONS[frameIndex];
                       const isSelected = frameIndex === currentFrame;
+                      const isUIOnly = frameIndex >= DIRECTIONAL_FRAMES;
                       return (
                         <button
                           key={frameIndex}
                           onClick={() => setCurrentFrame(frameIndex)}
                           className={`relative border-2 ${
-                            isSelected ? "border-yellow-500" : "border-gray-600"
+                            isSelected ? "border-yellow-500" : isUIOnly ? "border-purple-600" : "border-gray-600"
                           } bg-black p-1 rounded transition-colors hover:border-yellow-400`}
                           style={{
                             width: 72,
@@ -347,8 +375,11 @@ export const VEHICLE_FRAME_OFFSETS = [
                               />
                             )}
                           </div>
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-xs text-center py-0.5">
+                          <div
+                            className={`absolute bottom-0 left-0 right-0 bg-black/70 text-xs text-center py-0.5 ${isUIOnly ? "text-purple-400" : ""}`}
+                          >
                             {FRAME_LABELS[frameIndex]}
+                            {isUIOnly && " (UI)"}
                           </div>
                         </button>
                       );

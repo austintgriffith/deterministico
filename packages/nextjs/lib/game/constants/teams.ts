@@ -40,12 +40,17 @@ export const TEAM_HEX_COLORS: Record<TeamColor, string> = {
 // Vehicle types (size_type combinations available in /vehicles folder)
 export const VEHICLE_TYPES = [
   "heavy_comms",
+  "heavy_harvester",
   "heavy_military",
   "heavy_miner",
+  "heavy_railgun",
+  "heavy_tanker",
   "light_comms",
+  "light_harvester",
   "light_military",
   "light_miner",
-  "medium_military",
+  "light_railgun",
+  "light_tanker",
 ] as const;
 
 export type VehicleType = (typeof VEHICLE_TYPES)[number];

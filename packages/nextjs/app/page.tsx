@@ -94,8 +94,8 @@ const HomeContent = () => {
     focusTeamIndexRef.current = focusDice.roll(NUM_TEAMS);
 
     // Initialize one agent per team at their spawn point
-    // For now, only spawn comms units (0 = heavy_comms, 3 = light_comms)
-    const COMMS_TYPES = [0, 3];
+    // For now, only spawn comms units (0 = heavy_comms, 6 = light_comms)
+    const COMMS_TYPES = [0, 6];
     const initDice = new DeterministicDice(keccak256(toHex(roll + "agent-init")));
     for (let team = 0; team < NUM_TEAMS; team++) {
       const spawn = spawnPoints[team];
@@ -121,8 +121,8 @@ const HomeContent = () => {
       pool.updateAll(gameDice);
 
       // Spawn one new agent per team every 5 rounds (stop spawning after SPAWN_CUTOFF_ROUND)
-      // For now, only spawn comms units (0 = heavy_comms, 3 = light_comms)
-      const COMMS_TYPES = [0, 3];
+      // For now, only spawn comms units (0 = heavy_comms, 6 = light_comms)
+      const COMMS_TYPES = [0, 6];
       const nextRound = round + 1;
       if (nextRound % 5 === 0 && nextRound <= SPAWN_CUTOFF_ROUND) {
         const spawnDice = new DeterministicDice(keccak256(toHex(roll + "spawn" + round)));

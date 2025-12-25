@@ -22,7 +22,7 @@ export class AgentPool {
   y: Float32Array;
   direction: Uint8Array; // 0=north, 1=east, 2=south, 3=west
   team: Uint8Array; // 0-11 team index (matches TEAM_COLORS)
-  vehicleType: Uint8Array; // 0-6 vehicle type index (matches VEHICLE_TYPES)
+  vehicleType: Uint8Array; // 0-11 vehicle type index (matches VEHICLE_TYPES)
   spawnX: Float32Array; // spawn position X (for comms units)
   spawnY: Float32Array; // spawn position Y (for comms units)
 

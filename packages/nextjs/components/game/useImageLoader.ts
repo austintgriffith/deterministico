@@ -21,7 +21,7 @@ export function useImageLoader() {
     if (cache.loaded) return;
 
     let loadedCount = 0;
-    // 15 sprite sheets + (7 vehicle types * 12 team colors) = 15 + 84 = 99 total images
+    // 15 sprite sheets + (12 vehicle types * 12 team colors) = 15 + 144 = 159 total images
     const totalImages = SPRITE_SHEETS.length + VEHICLE_TYPES.length * TEAM_COLORS.length;
 
     const onLoad = () => {
@@ -46,7 +46,8 @@ export function useImageLoader() {
       img.src = `/surface/${sheetName}.png`;
     }
 
-    // Load all vehicle sprite sheets (7 vehicle types * 12 team colors = 84 sprites)
+    // Load all vehicle sprite sheets (12 vehicle types * 12 team colors = 144 sprites)
+    // Sprite sheets are 3 columns x 2 rows
     for (const vehicleType of VEHICLE_TYPES) {
       for (const teamColor of TEAM_COLORS) {
         const spriteKey = `${vehicleType}_${teamColor}`;
@@ -54,7 +55,7 @@ export function useImageLoader() {
         vehicleImg.onload = () => {
           cache.vehicleSprites.set(spriteKey, {
             image: vehicleImg,
-            frameWidth: vehicleImg.naturalWidth / 2,
+            frameWidth: vehicleImg.naturalWidth / 3,
             frameHeight: vehicleImg.naturalHeight / 2,
           });
           onLoad();

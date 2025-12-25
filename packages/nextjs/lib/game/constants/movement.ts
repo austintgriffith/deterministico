@@ -40,27 +40,37 @@ export const DIRECTION_DY = new Float32Array([-1, 1, 1, -1]);
 export const MOVE_AMOUNT = 5;
 
 // Movement speed per vehicle type (matches VEHICLE_TYPES order)
-// heavy=3px, medium=4px, light=5px
+// heavy=3px, light=5px
 export const MOVE_SPEED_BY_TYPE = new Float32Array([
   3, // heavy_comms (0)
-  3, // heavy_military (1)
-  3, // heavy_miner (2)
-  5, // light_comms (3)
-  5, // light_military (4)
-  5, // light_miner (5)
-  4, // medium_military (6)
+  3, // heavy_harvester (1)
+  3, // heavy_military (2)
+  3, // heavy_miner (3)
+  3, // heavy_railgun (4)
+  3, // heavy_tanker (5)
+  5, // light_comms (6)
+  5, // light_harvester (7)
+  5, // light_military (8)
+  5, // light_miner (9)
+  5, // light_railgun (10)
+  5, // light_tanker (11)
 ]);
 
 // Comms unit operating range (matches VEHICLE_TYPES order)
 // 0 means not a comms unit
 export const COMMS_RANGE = new Float32Array([
   800, // heavy_comms (0) - 800px range
-  0, // heavy_military (1) - not comms
-  0, // heavy_miner (2) - not comms
-  800, // light_comms (3) - 800px range
-  0, // light_military (4) - not comms
-  0, // light_miner (5) - not comms
-  0, // medium_military (6) - not comms
+  0, // heavy_harvester (1) - not comms
+  0, // heavy_military (2) - not comms
+  0, // heavy_miner (3) - not comms
+  0, // heavy_railgun (4) - not comms
+  0, // heavy_tanker (5) - not comms
+  800, // light_comms (6) - 800px range
+  0, // light_harvester (7) - not comms
+  0, // light_military (8) - not comms
+  0, // light_miner (9) - not comms
+  0, // light_railgun (10) - not comms
+  0, // light_tanker (11) - not comms
 ]);
 
 // Comms gravity behavior - creates web formation
