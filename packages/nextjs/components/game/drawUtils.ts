@@ -878,13 +878,12 @@ export function drawMinimap(
     const teamColor = TEAM_COLORS[teamIndex];
     const hexColor = TEAM_HEX_COLORS[teamColor];
 
-    // Draw flag marker (larger square with border)
-    const flagSize = tileMinimapSize * 3;
+    // Draw flag marker (same size as a tile)
     ctx.fillStyle = hexColor;
-    ctx.fillRect(flagPos.x - flagSize / 2, flagPos.y - flagSize / 2, flagSize, flagSize);
+    ctx.fillRect(flagPos.x - tileMinimapSize / 2, flagPos.y - tileMinimapSize / 2, tileMinimapSize, tileMinimapSize);
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1;
-    ctx.strokeRect(flagPos.x - flagSize / 2, flagPos.y - flagSize / 2, flagSize, flagSize);
+    ctx.strokeRect(flagPos.x - tileMinimapSize / 2, flagPos.y - tileMinimapSize / 2, tileMinimapSize, tileMinimapSize);
   }
 
   // Draw each agent on the minimap
