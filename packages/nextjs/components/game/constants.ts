@@ -41,7 +41,7 @@ export const MAX_ZOOM = 3;
 export const ZOOM_SENSITIVITY = 0.001;
 
 // Minimap configuration
-export const MINIMAP_SIZE = 180; // Size in pixels (square)
+export const MINIMAP_SIZE = 240; // Size in pixels (square)
 export const MINIMAP_MARGIN = 16; // Margin from screen edge
 export const MINIMAP_SCALE = 0.06; // World-to-minimap scale (smaller = more area visible)
 export const MINIMAP_SPRITE_SIZE = 12; // Vehicle sprite size on minimap
