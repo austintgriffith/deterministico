@@ -70,6 +70,15 @@ export const LIQUID_LAYER_COLORS = [
   "#99f1f2", // top
 ];
 
+// Terrain colors for debug overlay and minimap (matching actual terrain visuals)
+export const TERRAIN_COLORS = {
+  ground: "#4a3a5c", // Dark grayish-purple matching the ground tiles
+  liquid: "#5ad8d9", // Cyan/teal matching the liquid
+  mushroom: "#6b5b7b", // Slightly lighter purple for mushroom tiles
+  mountain: "#2d1f3d", // Dark purple for mountains
+  rubyMountain: "#ff4444", // Glowing red for ruby mountains
+};
+
 // Animation settings
 export const LIQUID_WAVE_AMPLITUDE = 1.5; // pixels of vertical movement
 export const LIQUID_WAVE_SPEED = 0.001; // oscillation speed
@@ -340,22 +349,22 @@ export function drawTerrainDebug(
       ctx.lineTo(diamondCenterX - halfWidth, diamondCenterY); // Left
       ctx.closePath();
 
-      // Color based on terrain type
+      // Color based on terrain type (using terrain-matching colors)
       if (terrain === "ground") {
-        ctx.fillStyle = "#00ff00"; // Green for ground
+        ctx.fillStyle = TERRAIN_COLORS.ground;
       } else if (terrain === "liquid") {
-        ctx.fillStyle = "#00ffff"; // Cyan for liquid
+        ctx.fillStyle = TERRAIN_COLORS.liquid;
       } else if (terrain === "mushroom") {
-        ctx.fillStyle = "#7b68ee"; // Medium slate blue for mushroom
+        ctx.fillStyle = TERRAIN_COLORS.mushroom;
       } else if (terrain === "rubyMountain") {
-        ctx.fillStyle = "#ff00ff"; // Magenta for ruby mountain
+        ctx.fillStyle = TERRAIN_COLORS.rubyMountain;
       } else {
-        ctx.fillStyle = "#ff0000"; // Red for mountain
+        ctx.fillStyle = TERRAIN_COLORS.mountain;
       }
       ctx.fill();
 
       // Draw outline
-      ctx.strokeStyle = "#000000";
+      ctx.strokeStyle = "#1a1a2e";
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -824,18 +833,18 @@ export function drawMinimap(
         const tileMinimapX = minimapCenterX + (colIndex - centerCol) * tileMinimapSize;
         const tileMinimapY = minimapCenterY + (rowIndex - centerRow) * tileMinimapSize;
 
-        // Get terrain color (same as debug mode)
+        // Get terrain color (using terrain-matching colors)
         const terrain = terrainGrid[rowIndex][colIndex];
         if (terrain === "ground") {
-          ctx.fillStyle = "#228B22"; // Forest green (darker)
+          ctx.fillStyle = TERRAIN_COLORS.ground;
         } else if (terrain === "liquid") {
-          ctx.fillStyle = "#00CED1"; // Dark cyan
+          ctx.fillStyle = TERRAIN_COLORS.liquid;
         } else if (terrain === "mushroom") {
-          ctx.fillStyle = "#7b68ee"; // Medium slate blue
+          ctx.fillStyle = TERRAIN_COLORS.mushroom;
         } else if (terrain === "rubyMountain") {
-          ctx.fillStyle = "#ff00ff"; // Magenta
+          ctx.fillStyle = TERRAIN_COLORS.rubyMountain;
         } else {
-          ctx.fillStyle = "#8B4513"; // Saddle brown for mountain
+          ctx.fillStyle = TERRAIN_COLORS.mountain;
         }
 
         // Draw square tile
