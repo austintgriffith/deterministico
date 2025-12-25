@@ -521,7 +521,7 @@ export function drawEdgeTiles(
 }
 
 /** Must match VEHICLE_COLLISION_PADDING in simulation.ts */
-const VEHICLE_COLLISION_PADDING = 20;
+const VEHICLE_COLLISION_PADDING = 32;
 
 /**
  * Convert world coordinates to tile coordinates.
@@ -856,9 +856,14 @@ export function drawMinimap(
 
   // Helper to convert world position to grid-based minimap position
   const worldToMinimapPos = (worldX: number, worldY: number) => {
+    // Account for tile center offsets - entities are positioned at tile centers,
+    // not top-left corners, so we need to adjust before converting
+    const adjustedX = worldX - TILE_RENDER_WIDTH / 2;
+    const adjustedY = worldY - TILE_CENTER_Y_OFFSET;
+
     // Convert world to grid coordinates
-    const colMinusRow = (worldX - centerX) / TILE_X_SPACING;
-    const colPlusRow = (worldY - startY) / TILE_Y_SPACING;
+    const colMinusRow = (adjustedX - centerX) / TILE_X_SPACING;
+    const colPlusRow = (adjustedY - startY) / TILE_Y_SPACING;
     const col = (colMinusRow + colPlusRow) / 2;
     const row = (colPlusRow - colMinusRow) / 2;
 

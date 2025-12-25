@@ -97,7 +97,7 @@ export function isWithinBounds(worldX: number, worldY: number, centerX: number, 
 }
 
 /** Padding around vehicle collision point in pixels */
-const VEHICLE_COLLISION_PADDING = 50;
+const VEHICLE_COLLISION_PADDING = 32;
 
 /**
  * Check if a single point is on ground terrain.
