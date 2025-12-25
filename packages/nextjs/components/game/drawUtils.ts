@@ -792,8 +792,8 @@ export function drawMinimap(
   const minimapCenterX = minimapX + MINIMAP_SIZE / 2;
   const minimapCenterY = minimapY + MINIMAP_SIZE / 2;
 
-  // Size of each terrain tile on the minimap
-  const tileMinimapSize = 3;
+  // Size of each terrain tile on the minimap (larger = more zoomed in)
+  const tileMinimapSize = 9;
 
   // Convert world center to grid coordinates for culling
   // From the isometric formula: worldX = centerX + (col - row) * TILE_X_SPACING
