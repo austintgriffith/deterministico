@@ -199,6 +199,10 @@ export function GameRenderer({
       viewportWidth,
       viewportHeight,
       zoom,
+      terrainGrid,
+      teamSpawnPoints,
+      centerX,
+      startY,
     );
   }, [grid, terrainGrid, debugMode, centerX, startY, agentPool, teamSpawnPoints, imageCacheRef, cameraRef, zoomRef]);
 

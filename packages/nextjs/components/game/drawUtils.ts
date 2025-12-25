@@ -746,8 +746,8 @@ export function drawAllSorted(
 
 /**
  * Draw a minimap/radar in the bottom-right corner showing a local top-down view.
- * Vehicles are rendered using their Top view sprite (Frame 4) rotated to show
- * their actual facing direction. North is always at the top of the minimap.
+ * Shows terrain tiles with debug colors, team flags, and vehicles using their
+ * Top view sprite rotated to show facing direction. North is always at the top.
  */
 export function drawMinimap(
   ctx: CanvasRenderingContext2D,
@@ -760,6 +760,10 @@ export function drawMinimap(
   viewportWidth: number,
   viewportHeight: number,
   zoom: number,
+  terrainGrid: TerrainType[][] | undefined,
+  teamSpawnPoints: SpawnPoint[],
+  centerX: number,
+  startY: number,
 ): void {
   ctx.save();
 
@@ -795,6 +799,89 @@ export function drawMinimap(
   // Rotation factor for converting isometric to top-down (45 degrees)
   // In isometric view, North points to top-right. We rotate coords so North is up.
   const ISO_TO_TOPDOWN = Math.SQRT1_2; // 1/sqrt(2) ≈ 0.707
+
+  // Size of each terrain tile on the minimap
+  const tileMinimapSize = TILE_X_SPACING * MINIMAP_SCALE * ISO_TO_TOPDOWN * 2;
+
+  // Draw terrain tiles on the minimap
+  if (terrainGrid) {
+    ctx.globalAlpha = 0.6;
+    for (let rowIndex = 0; rowIndex < terrainGrid.length; rowIndex++) {
+      for (let colIndex = 0; colIndex < terrainGrid[rowIndex].length; colIndex++) {
+        // Calculate tile world position (center of tile)
+        const tileWorldX = centerX + (colIndex - rowIndex) * TILE_X_SPACING + TILE_RENDER_WIDTH / 2;
+        const tileWorldY = startY + (colIndex + rowIndex) * TILE_Y_SPACING + TILE_Y_SPACING;
+
+        // Calculate offset from camera center
+        const offsetX = tileWorldX - worldCenterX;
+        const offsetY = tileWorldY - worldCenterY;
+
+        // Skip tiles outside minimap radius
+        const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+        if (distance > minimapWorldRadius * 1.5) continue;
+
+        // Convert to rotated minimap coordinates
+        const rotatedX = (offsetX + offsetY) * ISO_TO_TOPDOWN;
+        const rotatedY = (offsetY - offsetX) * ISO_TO_TOPDOWN;
+        const tileMinimapX = minimapCenterX + rotatedX * MINIMAP_SCALE;
+        const tileMinimapY = minimapCenterY + rotatedY * MINIMAP_SCALE;
+
+        // Get terrain color (same as debug mode)
+        const terrain = terrainGrid[rowIndex][colIndex];
+        if (terrain === "ground") {
+          ctx.fillStyle = "#00ff00"; // Green
+        } else if (terrain === "liquid") {
+          ctx.fillStyle = "#00ffff"; // Cyan
+        } else if (terrain === "mushroom") {
+          ctx.fillStyle = "#7b68ee"; // Medium slate blue
+        } else if (terrain === "rubyMountain") {
+          ctx.fillStyle = "#ff00ff"; // Magenta
+        } else {
+          ctx.fillStyle = "#ff0000"; // Red for mountain
+        }
+
+        // Draw small square for tile
+        ctx.fillRect(
+          tileMinimapX - tileMinimapSize / 2,
+          tileMinimapY - tileMinimapSize / 2,
+          tileMinimapSize,
+          tileMinimapSize,
+        );
+      }
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  // Draw team flag positions (larger colored markers)
+  for (let teamIndex = 0; teamIndex < teamSpawnPoints.length; teamIndex++) {
+    const spawn = teamSpawnPoints[teamIndex];
+
+    // Calculate offset from camera center
+    const offsetX = spawn.x - worldCenterX;
+    const offsetY = spawn.y - worldCenterY;
+
+    // Skip if outside minimap radius
+    const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+    if (distance > minimapWorldRadius * 1.5) continue;
+
+    // Convert to rotated minimap coordinates
+    const rotatedX = (offsetX + offsetY) * ISO_TO_TOPDOWN;
+    const rotatedY = (offsetY - offsetX) * ISO_TO_TOPDOWN;
+    const flagMinimapX = minimapCenterX + rotatedX * MINIMAP_SCALE;
+    const flagMinimapY = minimapCenterY + rotatedY * MINIMAP_SCALE;
+
+    // Get team color
+    const teamColor = TEAM_COLORS[teamIndex];
+    const hexColor = TEAM_HEX_COLORS[teamColor];
+
+    // Draw flag marker (larger square with border)
+    const flagSize = tileMinimapSize * 2;
+    ctx.fillStyle = hexColor;
+    ctx.fillRect(flagMinimapX - flagSize / 2, flagMinimapY - flagSize / 2, flagSize, flagSize);
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(flagMinimapX - flagSize / 2, flagMinimapY - flagSize / 2, flagSize, flagSize);
+  }
 
   // Draw each agent on the minimap
   for (let i = 0; i < agentPool.count; i++) {
