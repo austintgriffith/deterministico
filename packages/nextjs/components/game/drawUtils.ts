@@ -12,7 +12,6 @@ import {
   MINIMAP_BORDER_WIDTH,
   MINIMAP_CORNER_RADIUS,
   MINIMAP_MARGIN,
-  MINIMAP_SCALE,
   MINIMAP_SIZE,
   MINIMAP_SPRITE_SIZE,
   TOP_VIEW_SPRITE_COL,
@@ -793,115 +792,113 @@ export function drawMinimap(
   const minimapCenterX = minimapX + MINIMAP_SIZE / 2;
   const minimapCenterY = minimapY + MINIMAP_SIZE / 2;
 
-  // Calculate how much world space the minimap covers
-  const minimapWorldRadius = MINIMAP_SIZE / 2 / MINIMAP_SCALE;
-
-  // Rotation factor for converting isometric to top-down (45 degrees)
-  // In isometric view, North points to top-right. We rotate coords so North is up.
-  const ISO_TO_TOPDOWN = Math.SQRT1_2; // 1/sqrt(2) ≈ 0.707
-
   // Size of each terrain tile on the minimap
-  const tileMinimapSize = TILE_X_SPACING * MINIMAP_SCALE * ISO_TO_TOPDOWN * 2;
+  const tileMinimapSize = 3;
 
-  // Draw terrain tiles on the minimap
+  // Convert world center to grid coordinates for culling
+  // From the isometric formula: worldX = centerX + (col - row) * TILE_X_SPACING
+  //                            worldY = startY + (col + row) * TILE_Y_SPACING
+  const centerColMinusRow = (worldCenterX - centerX) / TILE_X_SPACING;
+  const centerColPlusRow = (worldCenterY - startY) / TILE_Y_SPACING;
+  const centerCol = (centerColMinusRow + centerColPlusRow) / 2;
+  const centerRow = (centerColPlusRow - centerColMinusRow) / 2;
+
+  // How many tiles fit in half the minimap (with some buffer)
+  const tilesInRadius = Math.ceil(MINIMAP_SIZE / 2 / tileMinimapSize) + 2;
+
+  // Draw terrain tiles on the minimap as a simple square grid
   if (terrainGrid) {
     ctx.globalAlpha = 0.6;
-    for (let rowIndex = 0; rowIndex < terrainGrid.length; rowIndex++) {
-      for (let colIndex = 0; colIndex < terrainGrid[rowIndex].length; colIndex++) {
-        // Calculate tile world position (center of tile)
-        const tileWorldX = centerX + (colIndex - rowIndex) * TILE_X_SPACING + TILE_RENDER_WIDTH / 2;
-        const tileWorldY = startY + (colIndex + rowIndex) * TILE_Y_SPACING + TILE_Y_SPACING;
+    const gridSize = terrainGrid.length;
 
-        // Calculate offset from camera center
-        const offsetX = tileWorldX - worldCenterX;
-        const offsetY = tileWorldY - worldCenterY;
+    for (let rowIndex = 0; rowIndex < gridSize; rowIndex++) {
+      for (let colIndex = 0; colIndex < gridSize; colIndex++) {
+        // Skip tiles far from the center view
+        const rowDist = Math.abs(rowIndex - centerRow);
+        const colDist = Math.abs(colIndex - centerCol);
+        if (rowDist > tilesInRadius || colDist > tilesInRadius) continue;
 
-        // Skip tiles outside minimap radius
-        const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
-        if (distance > minimapWorldRadius * 1.5) continue;
-
-        // Convert to rotated minimap coordinates
-        const rotatedX = (offsetX + offsetY) * ISO_TO_TOPDOWN;
-        const rotatedY = (offsetY - offsetX) * ISO_TO_TOPDOWN;
-        const tileMinimapX = minimapCenterX + rotatedX * MINIMAP_SCALE;
-        const tileMinimapY = minimapCenterY + rotatedY * MINIMAP_SCALE;
+        // Simple grid layout: row goes down (south), col goes right (east)
+        // After 45-degree rotation: row goes down-left, col goes down-right
+        // For a true top-down view with North up: col increases to the right, row increases downward
+        const tileMinimapX = minimapCenterX + (colIndex - centerCol) * tileMinimapSize;
+        const tileMinimapY = minimapCenterY + (rowIndex - centerRow) * tileMinimapSize;
 
         // Get terrain color (same as debug mode)
         const terrain = terrainGrid[rowIndex][colIndex];
         if (terrain === "ground") {
-          ctx.fillStyle = "#00ff00"; // Green
+          ctx.fillStyle = "#228B22"; // Forest green (darker)
         } else if (terrain === "liquid") {
-          ctx.fillStyle = "#00ffff"; // Cyan
+          ctx.fillStyle = "#00CED1"; // Dark cyan
         } else if (terrain === "mushroom") {
           ctx.fillStyle = "#7b68ee"; // Medium slate blue
         } else if (terrain === "rubyMountain") {
           ctx.fillStyle = "#ff00ff"; // Magenta
         } else {
-          ctx.fillStyle = "#ff0000"; // Red for mountain
+          ctx.fillStyle = "#8B4513"; // Saddle brown for mountain
         }
 
-        // Draw small square for tile
-        ctx.fillRect(
-          tileMinimapX - tileMinimapSize / 2,
-          tileMinimapY - tileMinimapSize / 2,
-          tileMinimapSize,
-          tileMinimapSize,
-        );
+        // Draw square tile
+        ctx.fillRect(tileMinimapX, tileMinimapY, tileMinimapSize, tileMinimapSize);
       }
     }
     ctx.globalAlpha = 1.0;
   }
 
+  // Helper to convert world position to grid-based minimap position
+  const worldToMinimapPos = (worldX: number, worldY: number) => {
+    // Convert world to grid coordinates
+    const colMinusRow = (worldX - centerX) / TILE_X_SPACING;
+    const colPlusRow = (worldY - startY) / TILE_Y_SPACING;
+    const col = (colMinusRow + colPlusRow) / 2;
+    const row = (colPlusRow - colMinusRow) / 2;
+
+    // Convert to minimap position
+    return {
+      x: minimapCenterX + (col - centerCol) * tileMinimapSize,
+      y: minimapCenterY + (row - centerRow) * tileMinimapSize,
+    };
+  };
+
   // Draw team flag positions (larger colored markers)
   for (let teamIndex = 0; teamIndex < teamSpawnPoints.length; teamIndex++) {
     const spawn = teamSpawnPoints[teamIndex];
+    const flagPos = worldToMinimapPos(spawn.x, spawn.y);
 
-    // Calculate offset from camera center
-    const offsetX = spawn.x - worldCenterX;
-    const offsetY = spawn.y - worldCenterY;
-
-    // Skip if outside minimap radius
-    const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
-    if (distance > minimapWorldRadius * 1.5) continue;
-
-    // Convert to rotated minimap coordinates
-    const rotatedX = (offsetX + offsetY) * ISO_TO_TOPDOWN;
-    const rotatedY = (offsetY - offsetX) * ISO_TO_TOPDOWN;
-    const flagMinimapX = minimapCenterX + rotatedX * MINIMAP_SCALE;
-    const flagMinimapY = minimapCenterY + rotatedY * MINIMAP_SCALE;
+    // Skip if outside minimap bounds
+    if (
+      flagPos.x < minimapX - 10 ||
+      flagPos.x > minimapX + MINIMAP_SIZE + 10 ||
+      flagPos.y < minimapY - 10 ||
+      flagPos.y > minimapY + MINIMAP_SIZE + 10
+    )
+      continue;
 
     // Get team color
     const teamColor = TEAM_COLORS[teamIndex];
     const hexColor = TEAM_HEX_COLORS[teamColor];
 
     // Draw flag marker (larger square with border)
-    const flagSize = tileMinimapSize * 2;
+    const flagSize = tileMinimapSize * 3;
     ctx.fillStyle = hexColor;
-    ctx.fillRect(flagMinimapX - flagSize / 2, flagMinimapY - flagSize / 2, flagSize, flagSize);
+    ctx.fillRect(flagPos.x - flagSize / 2, flagPos.y - flagSize / 2, flagSize, flagSize);
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1;
-    ctx.strokeRect(flagMinimapX - flagSize / 2, flagMinimapY - flagSize / 2, flagSize, flagSize);
+    ctx.strokeRect(flagPos.x - flagSize / 2, flagPos.y - flagSize / 2, flagSize, flagSize);
   }
 
   // Draw each agent on the minimap
   for (let i = 0; i < agentPool.count; i++) {
-    const agentWorldX = agentPool.x[i];
-    const agentWorldY = agentPool.y[i];
+    const agentPos = worldToMinimapPos(agentPool.x[i], agentPool.y[i]);
 
-    // Calculate offset from world center
-    const offsetX = agentWorldX - worldCenterX;
-    const offsetY = agentWorldY - worldCenterY;
-
-    // Skip agents outside the minimap radius
-    const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
-    if (distance > minimapWorldRadius * 1.2) continue;
-
-    // Convert isometric world offset to top-down minimap coordinates
-    // Rotate 45 degrees so that North (top-right in isometric) becomes up
-    const rotatedX = (offsetX + offsetY) * ISO_TO_TOPDOWN;
-    const rotatedY = (offsetY - offsetX) * ISO_TO_TOPDOWN;
-    const minimapAgentX = minimapCenterX + rotatedX * MINIMAP_SCALE;
-    const minimapAgentY = minimapCenterY + rotatedY * MINIMAP_SCALE;
+    // Skip agents outside minimap bounds
+    if (
+      agentPos.x < minimapX - 10 ||
+      agentPos.x > minimapX + MINIMAP_SIZE + 10 ||
+      agentPos.y < minimapY - 10 ||
+      agentPos.y > minimapY + MINIMAP_SIZE + 10
+    )
+      continue;
 
     // Get the vehicle sprite
     const spriteKey = getSpriteKey(agentPool.vehicleType[i], agentPool.team[i]);
@@ -913,13 +910,14 @@ export function drawMinimap(
       const sy = TOP_VIEW_SPRITE_ROW * spriteInfo.frameHeight;
 
       // Get rotation based on direction
-      // Since we rotated the coordinate system 45 degrees, sprite rotation is adjusted
+      // In grid view: North=up, so direction 0 (north) = -90deg to point up
+      // Adjust rotation: grid North is -Y, but sprite North faces +Y by default
       const direction = agentPool.direction[i];
-      const rotation = DIRECTION_TO_ROTATION[direction];
+      const rotation = DIRECTION_TO_ROTATION[direction] - Math.PI / 4; // Adjust for grid orientation
 
       // Draw rotated sprite
       ctx.save();
-      ctx.translate(minimapAgentX, minimapAgentY);
+      ctx.translate(agentPos.x, agentPos.y);
       ctx.rotate(rotation);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(
@@ -943,23 +941,23 @@ export function drawMinimap(
   ctx.textAlign = "center";
   ctx.fillText("N", minimapCenterX, minimapY + 12);
 
-  // Draw viewport indicator as a rotated diamond (since we rotated coords 45 degrees)
-  // The viewport rectangle in isometric space becomes a diamond in top-down space
+  // Draw viewport indicator as a rectangle showing visible tiles
+  // Calculate how many tiles are visible in the viewport
   const viewportWorldWidth = viewportWidth / zoom;
   const viewportWorldHeight = viewportHeight / zoom;
-  const halfW = (viewportWorldWidth / 2) * MINIMAP_SCALE * ISO_TO_TOPDOWN;
-  const halfH = (viewportWorldHeight / 2) * MINIMAP_SCALE * ISO_TO_TOPDOWN;
+  const tilesVisibleX = viewportWorldWidth / TILE_X_SPACING / 2; // Approximate tiles visible
+  const tilesVisibleY = viewportWorldHeight / TILE_Y_SPACING / 2;
+  const viewportMinimapW = tilesVisibleX * tileMinimapSize;
+  const viewportMinimapH = tilesVisibleY * tileMinimapSize;
 
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
   ctx.lineWidth = 1;
-  ctx.beginPath();
-  // Diamond shape: top, right, bottom, left
-  ctx.moveTo(minimapCenterX, minimapCenterY - halfW - halfH); // Top
-  ctx.lineTo(minimapCenterX + halfW + halfH, minimapCenterY); // Right
-  ctx.lineTo(minimapCenterX, minimapCenterY + halfW + halfH); // Bottom
-  ctx.lineTo(minimapCenterX - halfW - halfH, minimapCenterY); // Left
-  ctx.closePath();
-  ctx.stroke();
+  ctx.strokeRect(
+    minimapCenterX - viewportMinimapW / 2,
+    minimapCenterY - viewportMinimapH / 2,
+    viewportMinimapW,
+    viewportMinimapH,
+  );
 
   ctx.restore();
 }
