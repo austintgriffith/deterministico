@@ -3,9 +3,20 @@
  */
 import {
   DIRECTION_SPRITE_POS,
+  DIRECTION_TO_ROTATION,
   FIRST_MOUNTAIN_SHEET_INDEX,
   FLAG_DEPTH_OFFSET,
   GROUND_DEPTH_OFFSET,
+  MINIMAP_BG_COLOR,
+  MINIMAP_BORDER_COLOR,
+  MINIMAP_BORDER_WIDTH,
+  MINIMAP_CORNER_RADIUS,
+  MINIMAP_MARGIN,
+  MINIMAP_SCALE,
+  MINIMAP_SIZE,
+  MINIMAP_SPRITE_SIZE,
+  TOP_VIEW_SPRITE_COL,
+  TOP_VIEW_SPRITE_ROW,
   VEHICLE_DEPTH_OFFSET,
   VEHICLE_Y_OFFSET,
 } from "./constants";
@@ -731,4 +742,126 @@ export function drawAllSorted(
       }
     }
   }
+}
+
+/**
+ * Draw a minimap/radar in the bottom-right corner showing a local top-down view.
+ * Vehicles are rendered using their Top view sprite (Frame 4) rotated to show
+ * their actual facing direction. North is always at the top of the minimap.
+ */
+export function drawMinimap(
+  ctx: CanvasRenderingContext2D,
+  agentPool: AgentPool,
+  cache: ImageCache,
+  canvasWidth: number,
+  canvasHeight: number,
+  cameraX: number,
+  cameraY: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  zoom: number,
+): void {
+  ctx.save();
+
+  // Calculate minimap position (bottom-right corner)
+  const minimapX = canvasWidth - MINIMAP_SIZE - MINIMAP_MARGIN;
+  const minimapY = canvasHeight - MINIMAP_SIZE - MINIMAP_MARGIN;
+
+  // Draw minimap background with rounded corners
+  ctx.beginPath();
+  ctx.roundRect(minimapX, minimapY, MINIMAP_SIZE, MINIMAP_SIZE, MINIMAP_CORNER_RADIUS);
+  ctx.fillStyle = MINIMAP_BG_COLOR;
+  ctx.fill();
+  ctx.strokeStyle = MINIMAP_BORDER_COLOR;
+  ctx.lineWidth = MINIMAP_BORDER_WIDTH;
+  ctx.stroke();
+
+  // Set up clipping region for minimap content
+  ctx.beginPath();
+  ctx.roundRect(minimapX, minimapY, MINIMAP_SIZE, MINIMAP_SIZE, MINIMAP_CORNER_RADIUS);
+  ctx.clip();
+
+  // Calculate the center of the current view in world coordinates
+  const worldCenterX = cameraX + viewportWidth / zoom / 2;
+  const worldCenterY = cameraY + viewportHeight / zoom / 2;
+
+  // Minimap center in screen coordinates
+  const minimapCenterX = minimapX + MINIMAP_SIZE / 2;
+  const minimapCenterY = minimapY + MINIMAP_SIZE / 2;
+
+  // Calculate how much world space the minimap covers
+  const minimapWorldRadius = MINIMAP_SIZE / 2 / MINIMAP_SCALE;
+
+  // Draw each agent on the minimap
+  for (let i = 0; i < agentPool.count; i++) {
+    const agentWorldX = agentPool.x[i];
+    const agentWorldY = agentPool.y[i];
+
+    // Calculate offset from world center
+    const offsetX = agentWorldX - worldCenterX;
+    const offsetY = agentWorldY - worldCenterY;
+
+    // Skip agents outside the minimap radius
+    const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+    if (distance > minimapWorldRadius * 1.2) continue;
+
+    // Convert world offset to minimap coordinates
+    const minimapAgentX = minimapCenterX + offsetX * MINIMAP_SCALE;
+    const minimapAgentY = minimapCenterY + offsetY * MINIMAP_SCALE;
+
+    // Get the vehicle sprite
+    const spriteKey = getSpriteKey(agentPool.vehicleType[i], agentPool.team[i]);
+    const spriteInfo = cache.vehicleSprites.get(spriteKey);
+
+    if (spriteInfo) {
+      // Get the Top view sprite (Frame 4 at col=2, row=0)
+      const sx = TOP_VIEW_SPRITE_COL * spriteInfo.frameWidth;
+      const sy = TOP_VIEW_SPRITE_ROW * spriteInfo.frameHeight;
+
+      // Get rotation based on direction
+      const direction = agentPool.direction[i];
+      const rotation = DIRECTION_TO_ROTATION[direction];
+
+      // Draw rotated sprite
+      ctx.save();
+      ctx.translate(minimapAgentX, minimapAgentY);
+      ctx.rotate(rotation);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(
+        spriteInfo.image,
+        sx,
+        sy,
+        spriteInfo.frameWidth,
+        spriteInfo.frameHeight,
+        -MINIMAP_SPRITE_SIZE / 2,
+        -MINIMAP_SPRITE_SIZE / 2,
+        MINIMAP_SPRITE_SIZE,
+        MINIMAP_SPRITE_SIZE,
+      );
+      ctx.restore();
+    }
+  }
+
+  // Draw a small "N" indicator at the top for North
+  ctx.fillStyle = "#888";
+  ctx.font = "bold 10px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("N", minimapCenterX, minimapY + 12);
+
+  // Draw viewport rectangle indicator (shows current camera view area)
+  const viewportWorldWidth = viewportWidth / zoom;
+  const viewportWorldHeight = viewportHeight / zoom;
+  const viewportMinimapWidth = viewportWorldWidth * MINIMAP_SCALE;
+  const viewportMinimapHeight = viewportWorldHeight * MINIMAP_SCALE;
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(
+    minimapCenterX - viewportMinimapWidth / 2,
+    minimapCenterY - viewportMinimapHeight / 2,
+    viewportMinimapWidth,
+    viewportMinimapHeight,
+  );
+
+  ctx.restore();
 }

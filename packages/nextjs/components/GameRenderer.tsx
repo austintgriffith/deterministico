@@ -6,6 +6,7 @@ import {
   drawAgentDebugMarkers,
   drawAllSorted,
   drawEdgeTiles,
+  drawMinimap,
   drawTerrainDebug,
   useCamera,
   useImageLoader,
@@ -185,6 +186,20 @@ export function GameRenderer({
 
     // Restore context state
     ctx.restore();
+
+    // Draw minimap overlay (in screen space, after restore)
+    drawMinimap(
+      ctx,
+      agentPool,
+      cache,
+      viewportWidth,
+      viewportHeight,
+      camera.x,
+      camera.y,
+      viewportWidth,
+      viewportHeight,
+      zoom,
+    );
   }, [grid, terrainGrid, debugMode, centerX, startY, agentPool, teamSpawnPoints, imageCacheRef, cameraRef, zoomRef]);
 
   // Animation loop

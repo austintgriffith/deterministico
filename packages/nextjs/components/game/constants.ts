@@ -39,3 +39,26 @@ export const MAX_ZOOM = 3;
 
 // Zoom sensitivity for mouse wheel
 export const ZOOM_SENSITIVITY = 0.001;
+
+// Minimap configuration
+export const MINIMAP_SIZE = 180; // Size in pixels (square)
+export const MINIMAP_MARGIN = 16; // Margin from screen edge
+export const MINIMAP_SCALE = 0.06; // World-to-minimap scale (smaller = more area visible)
+export const MINIMAP_SPRITE_SIZE = 12; // Vehicle sprite size on minimap
+export const MINIMAP_BG_COLOR = "rgba(0, 0, 0, 0.75)";
+export const MINIMAP_BORDER_COLOR = "#555";
+export const MINIMAP_BORDER_WIDTH = 2;
+export const MINIMAP_CORNER_RADIUS = 8;
+
+// Top-view sprite position in sprite sheet (Frame 4 at col=2, row=0)
+export const TOP_VIEW_SPRITE_COL = 2;
+export const TOP_VIEW_SPRITE_ROW = 0;
+
+// Direction to rotation angle (radians) for top-view sprites on minimap
+// Top-view sprite faces North (up) by default, so we rotate based on direction
+export const DIRECTION_TO_ROTATION: number[] = [
+  0, // 0=north: 0 degrees (no rotation)
+  Math.PI / 2, // 1=east: 90 degrees clockwise
+  Math.PI, // 2=south: 180 degrees
+  -Math.PI / 2, // 3=west: 270 degrees (or -90)
+];
