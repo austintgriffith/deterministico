@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY } from "./constants";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { KEYBOARD_PAN_SPEED, MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY } from "./constants";
 import type { CameraState, DragState, PinchState } from "~~/lib/game";
 
 /**
@@ -16,6 +16,10 @@ export function useCamera() {
   // Pinch gesture tracking
   const pinchStartRef = useRef<PinchState>({ distance: 0, zoom: 1, centerX: 0, centerY: 0 });
   const [isPinching, setIsPinching] = useState(false);
+
+  // Keyboard pan tracking
+  const keysPressed = useRef<Set<string>>(new Set());
+  const keyAnimationRef = useRef<number>(0);
 
   // Set camera position
   const setCamera = useCallback((x: number, y: number) => {
@@ -178,6 +182,67 @@ export function useCamera() {
 
       cameraRef.current.x = worldX - mouseX / newZoom;
       cameraRef.current.y = worldY - mouseY / newZoom;
+    };
+  }, []);
+
+  // Keyboard arrow key panning
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if user is typing in an input
+      if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "TEXTAREA") {
+        return;
+      }
+
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d", "W", "A", "S", "D"].includes(e.key)) {
+        e.preventDefault();
+        keysPressed.current.add(e.key);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysPressed.current.delete(e.key);
+    };
+
+    const updateCameraFromKeys = () => {
+      const keys = keysPressed.current;
+      if (keys.size === 0) {
+        keyAnimationRef.current = requestAnimationFrame(updateCameraFromKeys);
+        return;
+      }
+
+      const zoom = zoomRef.current;
+      const panSpeed = KEYBOARD_PAN_SPEED / zoom;
+
+      // Vertical movement (up/down)
+      if (keys.has("ArrowUp") || keys.has("w") || keys.has("W")) {
+        cameraRef.current.y -= panSpeed;
+      }
+      if (keys.has("ArrowDown") || keys.has("s") || keys.has("S")) {
+        cameraRef.current.y += panSpeed;
+      }
+
+      // Horizontal movement (left/right)
+      if (keys.has("ArrowLeft") || keys.has("a") || keys.has("A")) {
+        cameraRef.current.x -= panSpeed;
+      }
+      if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) {
+        cameraRef.current.x += panSpeed;
+      }
+
+      keyAnimationRef.current = requestAnimationFrame(updateCameraFromKeys);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    keyAnimationRef.current = requestAnimationFrame(updateCameraFromKeys);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      if (keyAnimationRef.current) {
+        cancelAnimationFrame(keyAnimationRef.current);
+      }
+      keysPressed.current.clear();
     };
   }, []);
 

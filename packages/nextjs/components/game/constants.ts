@@ -40,6 +40,9 @@ export const MAX_ZOOM = 3;
 // Zoom sensitivity for mouse wheel
 export const ZOOM_SENSITIVITY = 0.001;
 
+// Keyboard pan speed (pixels per frame at zoom 1.0)
+export const KEYBOARD_PAN_SPEED = 20;
+
 // Minimap configuration
 export const MINIMAP_SIZE = 240; // Size in pixels (square)
 export const MINIMAP_MARGIN = 16; // Margin from screen edge

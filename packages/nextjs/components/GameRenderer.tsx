@@ -40,9 +40,11 @@ interface GameRendererProps {
  * - Dirty flag rendering (only redraws when needed)
  * - Image caching
  *
- * Debug mode (press 'D'):
- * - Shows terrain overlay (green = ground, red = mountain)
- * - Shows agent position markers
+ * Controls:
+ * - Arrow keys or WASD: Pan camera
+ * - Mouse drag: Pan camera
+ * - Mouse wheel / Pinch: Zoom in/out
+ * - Press 'G': Toggle debug mode (terrain overlay + agent markers)
  */
 export function GameRenderer({
   grid,
@@ -242,10 +244,10 @@ export function GameRenderer({
     return () => window.removeEventListener("resize", handleResize);
   }, [imagesLoaded]);
 
-  // Debug mode toggle (press 'D')
+  // Debug mode toggle (press 'G' for Grid debug)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "d" || e.key === "D") {
+      if (e.key === "g" || e.key === "G") {
         setDebugMode(prev => !prev);
       }
     };

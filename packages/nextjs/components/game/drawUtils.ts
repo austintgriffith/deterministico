@@ -500,21 +500,12 @@ export function drawEdgeTiles(
     ctx.fill();
   };
 
-  // Draw edge tiles around all four sides (multiple rows deep for coverage)
+  // Draw edge tiles on South and East sides only (multiple rows deep for coverage)
+  // North and West edges are left open so mountains remain visible
   for (let depth = 1; depth <= EDGE_BORDER_DEPTH; depth++) {
-    // North edge (row = -depth, all columns)
-    for (let col = -depth; col < gridSize + depth; col++) {
-      drawBlackTile(-depth, col);
-    }
-
     // South edge (row = gridSize + depth - 1, all columns)
     for (let col = -depth; col < gridSize + depth; col++) {
       drawBlackTile(gridSize + depth - 1, col);
-    }
-
-    // West edge (col = -depth, all rows except corners already drawn)
-    for (let row = -depth + 1; row < gridSize + depth - 1; row++) {
-      drawBlackTile(row, -depth);
     }
 
     // East edge (col = gridSize + depth - 1, all rows except corners already drawn)
@@ -960,23 +951,30 @@ export function drawMinimap(
   ctx.textAlign = "center";
   ctx.fillText("N", minimapCenterX, minimapY + 12);
 
-  // Draw viewport indicator as a rectangle showing visible tiles
-  // Calculate how many tiles are visible in the viewport
+  // Draw viewport indicator as a diamond showing visible tiles
+  // The game view is isometric (rotated 45°), so the viewport footprint on the
+  // top-down minimap is a diamond. In isometric projection:
+  // - Screen X movement covers (col - row) at rate TILE_X_SPACING
+  // - Screen Y movement covers (col + row) at rate TILE_Y_SPACING
+  // The visible row/col span both depend on BOTH screen dimensions combined.
   const viewportWorldWidth = viewportWidth / zoom;
   const viewportWorldHeight = viewportHeight / zoom;
-  const tilesVisibleX = viewportWorldWidth / TILE_X_SPACING / 2; // Approximate tiles visible
-  const tilesVisibleY = viewportWorldHeight / TILE_Y_SPACING / 2;
-  const viewportMinimapW = tilesVisibleX * tileMinimapSize;
-  const viewportMinimapH = tilesVisibleY * tileMinimapSize;
+  const dX = viewportWorldWidth / TILE_X_SPACING; // (col - row) range
+  const dY = viewportWorldHeight / TILE_Y_SPACING; // (col + row) range
+  // Both row span and col span = (dX + dY) / 2 due to isometric transform
+  const tileSpan = (dX + dY) / 2;
+  const viewportMinimapSize = tileSpan * tileMinimapSize;
 
+  // Draw diamond centered on the minimap (it's actually a square in tile-space)
   ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
   ctx.lineWidth = 1;
-  ctx.strokeRect(
-    minimapCenterX - viewportMinimapW / 2,
-    minimapCenterY - viewportMinimapH / 2,
-    viewportMinimapW,
-    viewportMinimapH,
-  );
+  ctx.beginPath();
+  ctx.moveTo(minimapCenterX, minimapCenterY - viewportMinimapSize / 2); // Top
+  ctx.lineTo(minimapCenterX + viewportMinimapSize / 2, minimapCenterY); // Right
+  ctx.lineTo(minimapCenterX, minimapCenterY + viewportMinimapSize / 2); // Bottom
+  ctx.lineTo(minimapCenterX - viewportMinimapSize / 2, minimapCenterY); // Left
+  ctx.closePath();
+  ctx.stroke();
 
   ctx.restore();
 }
