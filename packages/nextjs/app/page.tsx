@@ -20,8 +20,37 @@ import {
   TILE_Y_SPACING,
   generateGrid,
   generateSpawnPoints,
+  worldToTile,
 } from "~~/lib/game";
 import type { SpawnPoint } from "~~/lib/game";
+
+/**
+ * Reveal tiles around a given tile coordinate (center + 8 neighbors).
+ * Uses "row,col" string keys for the Set.
+ */
+function revealTilesAround(exploredTiles: Set<string>, row: number, col: number, gridSize: number): void {
+  // Offsets for center + 8 directions (N, NE, E, SE, S, SW, W, NW)
+  const offsets = [
+    [0, 0], // center
+    [-1, 0], // north
+    [-1, 1], // north-east
+    [0, 1], // east
+    [1, 1], // south-east
+    [1, 0], // south
+    [1, -1], // south-west
+    [0, -1], // west
+    [-1, -1], // north-west
+  ];
+
+  for (const [dr, dc] of offsets) {
+    const newRow = row + dr;
+    const newCol = col + dc;
+    // Only add if within grid bounds
+    if (newRow >= 0 && newRow < gridSize && newCol >= 0 && newCol < gridSize) {
+      exploredTiles.add(`${newRow},${newCol}`);
+    }
+  }
+}
 
 const HomeContent = () => {
   const router = useRouter();
@@ -38,6 +67,9 @@ const HomeContent = () => {
 
   // Random team to focus camera on at start
   const focusTeamIndexRef = useRef<number>(0);
+
+  // Explored tiles for fog of war (Set of "row,col" strings)
+  const exploredTilesRef = useRef<Set<string>>(new Set());
 
   // Force re-render counter for UI updates
   const [, forceUpdate] = useState(0);
@@ -57,6 +89,9 @@ const HomeContent = () => {
   useEffect(() => {
     const pool = agentPoolRef.current;
     pool.reset();
+
+    // Reset explored tiles for new game
+    exploredTilesRef.current = new Set();
 
     if (!roll || !gridData) {
       setRound(0);
@@ -102,6 +137,10 @@ const HomeContent = () => {
       const randomDirection = initDice.roll(4) % 4; // 0=north, 1=east, 2=south, 3=west
       const randomVehicle = COMMS_TYPES[initDice.roll(COMMS_TYPES.length)];
       pool.add(spawn.x, spawn.y, randomDirection, team, randomVehicle);
+
+      // Reveal tiles around initial spawn position
+      const { row, col } = worldToTile(spawn.x, spawn.y, centerX);
+      revealTilesAround(exploredTilesRef.current, row, col, GRID_SIZE);
     }
 
     setRound(0);
@@ -120,6 +159,12 @@ const HomeContent = () => {
       // Update all agents in place (zero allocations)
       pool.updateAll(gameDice);
 
+      // Reveal tiles around all agents after movement
+      for (let i = 0; i < pool.count; i++) {
+        const { row, col } = worldToTile(pool.x[i], pool.y[i], centerX);
+        revealTilesAround(exploredTilesRef.current, row, col, GRID_SIZE);
+      }
+
       // Spawn one new agent per team every 5 rounds (stop spawning after SPAWN_CUTOFF_ROUND)
       // For now, only spawn comms units (0 = heavy_comms, 6 = light_comms)
       const COMMS_TYPES = [0, 6];
@@ -134,6 +179,10 @@ const HomeContent = () => {
           const randomDirection = spawnDice.roll(4) % 4;
           const randomVehicle = COMMS_TYPES[spawnDice.roll(COMMS_TYPES.length)];
           pool.add(spawn.x, spawn.y, randomDirection, team, randomVehicle);
+
+          // Reveal tiles around newly spawned agent
+          const { row, col } = worldToTile(spawn.x, spawn.y, centerX);
+          revealTilesAround(exploredTilesRef.current, row, col, GRID_SIZE);
         }
       }
 
@@ -142,7 +191,7 @@ const HomeContent = () => {
     }, ROUND_DELAY);
 
     return () => clearTimeout(timer);
-  }, [roll, round, rendererReady, mapWidth, mapHeight]);
+  }, [roll, round, rendererReady, mapWidth, mapHeight, centerX]);
 
   const handleRoll = () => {
     const randomNumber = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
@@ -194,6 +243,7 @@ const HomeContent = () => {
           agentPool={agentPoolRef.current}
           teamSpawnPoints={teamSpawnPointsRef.current}
           focusTeamIndex={focusTeamIndexRef.current}
+          exploredTiles={exploredTilesRef.current}
           onReady={handleRendererReady}
         />
       )}

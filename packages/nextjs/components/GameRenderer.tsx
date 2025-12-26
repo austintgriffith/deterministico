@@ -28,6 +28,7 @@ interface GameRendererProps {
   agentPool: AgentPool;
   teamSpawnPoints: SpawnPoint[];
   focusTeamIndex?: number; // Team index to center camera on at start
+  exploredTiles?: Set<string>; // Set of "row,col" strings for fog of war
   onReady?: () => void;
 }
 
@@ -52,6 +53,7 @@ export function GameRenderer({
   agentPool,
   teamSpawnPoints,
   focusTeamIndex,
+  exploredTiles,
   onReady,
 }: GameRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -171,6 +173,7 @@ export function GameRenderer({
       visibleWidth,
       visibleHeight,
       performance.now(), // Animation time for liquid effects
+      exploredTiles,
     );
 
     // Draw black edge tiles to mask liquid overflow on east/south edges
@@ -205,8 +208,21 @@ export function GameRenderer({
       teamSpawnPoints,
       centerX,
       startY,
+      exploredTiles,
     );
-  }, [grid, terrainGrid, debugMode, centerX, startY, agentPool, teamSpawnPoints, imageCacheRef, cameraRef, zoomRef]);
+  }, [
+    grid,
+    terrainGrid,
+    debugMode,
+    centerX,
+    startY,
+    agentPool,
+    teamSpawnPoints,
+    imageCacheRef,
+    cameraRef,
+    zoomRef,
+    exploredTiles,
+  ]);
 
   // Animation loop
   useEffect(() => {

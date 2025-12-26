@@ -92,6 +92,7 @@ export function smoothTerrainGrid(grid: TerrainType[][], passNumber: number, see
         liquid: 0,
         mushroom: 0,
         rubyMountain: 0,
+        undiscovered: 0, // Not used in terrain generation, only for fog of war rendering
       };
 
       // Check 3x3 neighborhood (including self)

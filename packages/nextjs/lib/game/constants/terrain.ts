@@ -5,7 +5,7 @@
 
 // Terrain type system
 
-export type TerrainType = "ground" | "mountain" | "liquid" | "mushroom" | "rubyMountain";
+export type TerrainType = "ground" | "mountain" | "liquid" | "mushroom" | "rubyMountain" | "undiscovered";
 
 // Sprite sheets organized by terrain type (liquid has no sprites - rendered as colored diamond)
 export const TERRAIN_SHEETS: Record<TerrainType, string[]> = {
@@ -26,18 +26,20 @@ export const TERRAIN_SHEETS: Record<TerrainType, string[]> = {
   liquid: [], // No sprite sheets - rendered as colored diamond
   mushroom: ["mushrooms"],
   rubyMountain: ["rubymountain_tiles_01"],
+  undiscovered: ["unknown"], // Fog of war / unexplored areas
 };
 
-// Terrain type weights (must sum to 100)
+// Terrain type weights (must sum to 100 for natural terrain types)
 export const TERRAIN_WEIGHTS: Record<TerrainType, number> = {
   ground: 50,
   mountain: 20,
   liquid: 17,
   mushroom: 10,
   rubyMountain: 3,
+  undiscovered: 0, // Not naturally generated - applied programmatically for fog of war
 };
 
-// Terrain types in order for weighted selection
+// Terrain types in order for weighted selection (undiscovered excluded - not naturally generated)
 export const TERRAIN_TYPES: TerrainType[] = ["ground", "mountain", "liquid", "mushroom", "rubyMountain"];
 
 // All available sprite sheets (flattened for loading)
@@ -46,6 +48,7 @@ export const SPRITE_SHEETS = [
   ...TERRAIN_SHEETS.mountain,
   ...TERRAIN_SHEETS.mushroom,
   ...TERRAIN_SHEETS.rubyMountain,
+  ...TERRAIN_SHEETS.undiscovered,
 ] as const;
 
 export type SpriteSheetName = (typeof SPRITE_SHEETS)[number];

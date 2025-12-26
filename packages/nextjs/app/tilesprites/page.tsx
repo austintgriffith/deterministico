@@ -84,18 +84,38 @@ export default function TileSpritesPage() {
     typeGrid = smoothTerrainGrid(typeGrid, 2, seedBigInt);
 
     // Phase 3: Select tile variants based on terrain type
+    // Note: sheetIndex of -1 indicates liquid terrain (rendered as colored diamond)
     const tiles: { sheetIndex: number; tileIndex: number }[][] = [];
+
+    // If a specific sheet is selected in UI, use it for ALL tiles
+    const overrideSheetIndex = selectedSheet !== "all" ? SPRITE_SHEETS.findIndex(s => s === selectedSheet) : -1;
+
     for (let row = 0; row < SURFACE_GRID_SIZE; row++) {
       const rowTiles: { sheetIndex: number; tileIndex: number }[] = [];
       for (let col = 0; col < SURFACE_GRID_SIZE; col++) {
+        // Use deterministic hash to select tile variant
+        const tileHash = hash(row + 3000, col + 3000, seedBigInt);
+        const tileIndex = Number(tileHash % BigInt(TOTAL_TILES_PER_SHEET));
+
+        // If specific sheet selected in UI, override ALL tiles (including liquid)
+        if (overrideSheetIndex >= 0) {
+          rowTiles.push({ sheetIndex: overrideSheetIndex, tileIndex });
+          continue;
+        }
+
         const terrainType = typeGrid[row][col];
 
         // Get available sheets for this terrain type
         const availableSheets = TERRAIN_SHEETS[terrainType];
 
-        // Use deterministic hash to select sheet and tile (now returns bigint)
+        // Handle liquid terrain (no sprite sheets - rendered as colored diamond)
+        if (availableSheets.length === 0) {
+          rowTiles.push({ sheetIndex: -1, tileIndex: 0 });
+          continue;
+        }
+
+        // Use deterministic hash to select sheet
         const sheetHash = hash(row + 2000, col + 2000, seedBigInt);
-        const tileHash = hash(row + 3000, col + 3000, seedBigInt);
 
         // Select random sheet from available sheets for this terrain type
         const selectedSheetName = availableSheets[Number(sheetHash % BigInt(availableSheets.length))];
@@ -103,19 +123,7 @@ export default function TileSpritesPage() {
         // Find the index in the full SPRITE_SHEETS array
         const sheetIndex = SPRITE_SHEETS.findIndex(s => s === selectedSheetName);
 
-        // Select random tile index (0-14 for 5x3 grid)
-        const tileIndex = Number(tileHash % BigInt(TOTAL_TILES_PER_SHEET));
-
-        // If specific sheet selected in UI, override terrain-based selection
-        if (selectedSheet !== "all") {
-          const overrideIndex = SPRITE_SHEETS.findIndex(s => s === selectedSheet);
-          rowTiles.push({
-            sheetIndex: overrideIndex >= 0 ? overrideIndex : sheetIndex,
-            tileIndex,
-          });
-        } else {
-          rowTiles.push({ sheetIndex, tileIndex });
-        }
+        rowTiles.push({ sheetIndex, tileIndex });
       }
       tiles.push(rowTiles);
     }
@@ -221,6 +229,7 @@ export default function TileSpritesPage() {
 
   // Load all sprite sheets
   const [loadedSheets, setLoadedSheets] = useState<Set<string>>(new Set());
+  const [failedSheets, setFailedSheets] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     SPRITE_SHEETS.forEach(sheetName => {
@@ -232,6 +241,10 @@ export default function TileSpritesPage() {
           setSheetHeight(img.naturalHeight);
         }
         setLoadedSheets(prev => new Set([...prev, sheetName]));
+      };
+      img.onerror = () => {
+        console.error(`Failed to load sprite sheet: ${sheetName}`);
+        setFailedSheets(prev => new Set([...prev, sheetName]));
       };
       img.src = `/surface/${sheetName}.png`;
     });
@@ -315,15 +328,45 @@ const SURFACE_SPACING_Y = ${surfaceSpacingY};`;
             surfaceTiles.map((row, rowIndex) =>
               row.map((tileData, colIndex) => {
                 const { sheetIndex, tileIndex } = tileData;
+
+                // Isometric positioning (diamond grid)
+                const screenX = centerX + (colIndex - rowIndex) * surfaceSpacingX;
+                const screenY = (colIndex + rowIndex) * surfaceSpacingY;
+
+                // Handle liquid terrain (sheetIndex === -1) - render as colored diamond
+                if (sheetIndex === -1) {
+                  return (
+                    <div
+                      key={`${rowIndex}-${colIndex}`}
+                      style={{
+                        position: "absolute",
+                        left: screenX,
+                        top: screenY,
+                        width: PREVIEW_WIDTH,
+                        height: PREVIEW_HEIGHT,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: PREVIEW_WIDTH * 0.9,
+                          height: PREVIEW_HEIGHT * 0.45,
+                          background: "linear-gradient(135deg, #1e90ff 0%, #0066cc 50%, #004499 100%)",
+                          clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+                          boxShadow: "inset 0 -20px 40px rgba(0,0,0,0.3), inset 0 20px 40px rgba(255,255,255,0.1)",
+                        }}
+                      />
+                    </div>
+                  );
+                }
+
                 const sheetName = SPRITE_SHEETS[sheetIndex];
                 const tileCol = tileIndex % SPRITE_SHEET_COLS;
                 const tileRow = Math.floor(tileIndex / SPRITE_SHEET_COLS);
                 const spriteOffsetX = startX + tileCol * stepX;
                 const spriteOffsetY = startY + tileRow * stepY;
-
-                // Isometric positioning (diamond grid)
-                const screenX = centerX + (colIndex - rowIndex) * surfaceSpacingX;
-                const screenY = (colIndex + rowIndex) * surfaceSpacingY;
 
                 return (
                   <div
@@ -433,10 +476,16 @@ const SURFACE_SPACING_Y = ${surfaceSpacingY};`;
                     <option value="all">All Sheets (Random)</option>
                     {SPRITE_SHEETS.map(sheet => (
                       <option key={sheet} value={sheet}>
-                        {sheet}
+                        {sheet} {loadedSheets.has(sheet) ? "✓" : failedSheets.has(sheet) ? "✗" : "..."}
                       </option>
                     ))}
                   </select>
+                  <div className="text-xs mt-2 text-gray-400">
+                    Loaded: {loadedSheets.size}/{SPRITE_SHEETS.length}
+                    {failedSheets.size > 0 && (
+                      <span className="text-red-400 ml-2">Failed: {Array.from(failedSheets).join(", ")}</span>
+                    )}
+                  </div>
                 </div>
               </div>
 

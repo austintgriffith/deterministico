@@ -632,10 +632,14 @@ export function drawAgentDebugMarkers(
   ctx.restore();
 }
 
+// Index of "unknown" sprite sheet for fog of war rendering
+const UNKNOWN_SHEET_INDEX = SPRITE_SHEETS.indexOf("unknown");
+
 /**
  * Draw all tiles, agents, and flags in depth-sorted order.
  * This is the main rendering function that properly handles isometric occlusion.
  * Liquid tiles (sheetIndex === -1) are rendered as colored diamonds instead of sprites.
+ * Unexplored tiles (not in exploredTiles set) are rendered with the "unknown" sprite.
  */
 export function drawAllSorted(
   ctx: CanvasRenderingContext2D,
@@ -652,6 +656,7 @@ export function drawAllSorted(
   visibleWidth: number,
   visibleHeight: number,
   time: number, // Animation time in ms for liquid effects
+  exploredTiles?: Set<string>, // Set of "row,col" strings for fog of war
 ): void {
   for (const drawable of drawables) {
     if (drawable.type === "tile") {
@@ -666,7 +671,43 @@ export function drawAllSorted(
       const screenX = worldX - cameraX;
       const screenY = worldY - cameraY;
 
-      // Draw liquid base under EVERY tile (so transparency shows liquid color)
+      // Check if tile is explored (fog of war)
+      const tileKey = `${drawable.row},${drawable.col}`;
+      const isExplored = !exploredTiles || exploredTiles.has(tileKey);
+
+      // If unexplored, draw the "unknown" fog of war sprite instead (darkened)
+      if (!isExplored && UNKNOWN_SHEET_INDEX >= 0) {
+        const unknownSheetInfo = cache.spriteSheets.get("unknown");
+        if (unknownSheetInfo) {
+          // Use tileIndex from the actual tile for variety in fog appearance
+          const tileCol = tileData.tileIndex % SPRITE_SHEET_COLS;
+          const tileRow = Math.floor(tileData.tileIndex / SPRITE_SHEET_COLS);
+          const srcX = TILE_START_X + tileCol * TILE_STEP_X;
+          const srcY = TILE_START_Y + tileRow * TILE_STEP_Y;
+
+          // Darken and make fog of war tiles semi-transparent
+          ctx.save();
+          ctx.filter = "brightness(0.25)";
+          ctx.globalAlpha = 0.93;
+
+          ctx.drawImage(
+            unknownSheetInfo.image,
+            srcX,
+            srcY,
+            TILE_RENDER_WIDTH,
+            TILE_RENDER_HEIGHT,
+            screenX,
+            screenY,
+            TILE_RENDER_WIDTH,
+            TILE_RENDER_HEIGHT,
+          );
+
+          ctx.restore();
+        }
+        continue; // Skip to next tile - don't draw anything else for unexplored tiles
+      }
+
+      // Draw liquid base under EVERY explored tile (so transparency shows liquid color)
       drawLiquidBase(ctx, screenX, screenY);
 
       // Check if this is a liquid tile (sheetIndex === -1 means no sprite)
@@ -749,10 +790,14 @@ export function drawAllSorted(
   }
 }
 
+// Fog of war color for minimap (dark unexplored areas)
+const MINIMAP_FOG_COLOR = "#1a1a2e";
+
 /**
  * Draw a minimap/radar in the bottom-right corner showing a local top-down view.
  * Shows terrain tiles with debug colors, team flags, and vehicles using their
  * Top view sprite rotated to show facing direction. North is always at the top.
+ * Unexplored tiles are shown with fog color.
  */
 export function drawMinimap(
   ctx: CanvasRenderingContext2D,
@@ -769,6 +814,7 @@ export function drawMinimap(
   teamSpawnPoints: SpawnPoint[],
   centerX: number,
   startY: number,
+  exploredTiles?: Set<string>, // Set of "row,col" strings for fog of war
 ): void {
   ctx.save();
 
@@ -830,18 +876,27 @@ export function drawMinimap(
         const tileMinimapX = minimapCenterX + (colIndex - centerCol) * tileMinimapSize;
         const tileMinimapY = minimapCenterY + (rowIndex - centerRow) * tileMinimapSize;
 
-        // Get terrain color (using terrain-matching colors)
-        const terrain = terrainGrid[rowIndex][colIndex];
-        if (terrain === "ground") {
-          ctx.fillStyle = TERRAIN_COLORS.ground;
-        } else if (terrain === "liquid") {
-          ctx.fillStyle = TERRAIN_COLORS.liquid;
-        } else if (terrain === "mushroom") {
-          ctx.fillStyle = TERRAIN_COLORS.mushroom;
-        } else if (terrain === "rubyMountain") {
-          ctx.fillStyle = TERRAIN_COLORS.rubyMountain;
+        // Check if tile is explored (fog of war)
+        const tileKey = `${rowIndex},${colIndex}`;
+        const isExplored = !exploredTiles || exploredTiles.has(tileKey);
+
+        // If unexplored, show fog color
+        if (!isExplored) {
+          ctx.fillStyle = MINIMAP_FOG_COLOR;
         } else {
-          ctx.fillStyle = TERRAIN_COLORS.mountain;
+          // Get terrain color (using terrain-matching colors)
+          const terrain = terrainGrid[rowIndex][colIndex];
+          if (terrain === "ground") {
+            ctx.fillStyle = TERRAIN_COLORS.ground;
+          } else if (terrain === "liquid") {
+            ctx.fillStyle = TERRAIN_COLORS.liquid;
+          } else if (terrain === "mushroom") {
+            ctx.fillStyle = TERRAIN_COLORS.mushroom;
+          } else if (terrain === "rubyMountain") {
+            ctx.fillStyle = TERRAIN_COLORS.rubyMountain;
+          } else {
+            ctx.fillStyle = TERRAIN_COLORS.mountain;
+          }
         }
 
         // Draw square tile
