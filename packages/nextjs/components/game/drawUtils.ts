@@ -951,28 +951,42 @@ export function drawMinimap(
   ctx.textAlign = "center";
   ctx.fillText("N", minimapCenterX, minimapY + 12);
 
-  // Draw viewport indicator as a diamond showing visible tiles
-  // The game view is isometric (rotated 45°), so the viewport footprint on the
-  // top-down minimap is a diamond. In isometric projection:
-  // - Screen X movement covers (col - row) at rate TILE_X_SPACING
-  // - Screen Y movement covers (col + row) at rate TILE_Y_SPACING
-  // The visible row/col span both depend on BOTH screen dimensions combined.
+  // Draw viewport indicator as a parallelogram showing the actual screen corners
+  // The game view is isometric (rotated 45°), so the rectangular screen projects
+  // to a parallelogram on the top-down minimap grid.
+  // In isometric: moving right on screen adds to (col - row), moving down adds to (col + row)
   const viewportWorldWidth = viewportWidth / zoom;
   const viewportWorldHeight = viewportHeight / zoom;
-  const dX = viewportWorldWidth / TILE_X_SPACING; // (col - row) range
-  const dY = viewportWorldHeight / TILE_Y_SPACING; // (col + row) range
-  // Both row span and col span = (dX + dY) / 2 due to isometric transform
-  const tileSpan = (dX + dY) / 2;
-  const viewportMinimapSize = tileSpan * tileMinimapSize;
+  const dColRow = viewportWorldWidth / TILE_X_SPACING; // Change in (col-row) across screen width
+  const dColPlusRow = viewportWorldHeight / TILE_Y_SPACING; // Change in (col+row) across screen height
 
-  // Draw diamond centered on the minimap (it's actually a square in tile-space)
+  // Calculate the 4 screen corners relative to center (in tile units, then convert to minimap pixels)
+  // TL corner: (-dColRow/2, -dColPlusRow/2) in (col-row, col+row) space
+  // Converting to (col, row): col = ((col-row) + (col+row))/2, row = ((col+row) - (col-row))/2
+  const halfW = (dColRow / 2) * tileMinimapSize; // Half width contribution
+  const halfH = (dColPlusRow / 2) * tileMinimapSize; // Half height contribution
+
+  // Screen corners on minimap (col = X increases right, row = Y increases down):
+  // TL: col = (-dColRow + -dColPlusRow)/2, row = (-dColPlusRow - -dColRow)/2 = (dColRow - dColPlusRow)/2
+  // TR: col = (dColRow + -dColPlusRow)/2, row = (-dColPlusRow - dColRow)/2
+  // BR: col = (dColRow + dColPlusRow)/2, row = (dColPlusRow - dColRow)/2
+  // BL: col = (-dColRow + dColPlusRow)/2, row = (dColPlusRow - -dColRow)/2 = (dColPlusRow + dColRow)/2
+  const tlX = minimapCenterX + (-halfW - halfH) / 2;
+  const tlY = minimapCenterY + (-halfH + halfW) / 2;
+  const trX = minimapCenterX + (halfW - halfH) / 2;
+  const trY = minimapCenterY + (-halfH - halfW) / 2;
+  const brX = minimapCenterX + (halfW + halfH) / 2;
+  const brY = minimapCenterY + (halfH - halfW) / 2;
+  const blX = minimapCenterX + (-halfW + halfH) / 2;
+  const blY = minimapCenterY + (halfH + halfW) / 2;
+
   ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(minimapCenterX, minimapCenterY - viewportMinimapSize / 2); // Top
-  ctx.lineTo(minimapCenterX + viewportMinimapSize / 2, minimapCenterY); // Right
-  ctx.lineTo(minimapCenterX, minimapCenterY + viewportMinimapSize / 2); // Bottom
-  ctx.lineTo(minimapCenterX - viewportMinimapSize / 2, minimapCenterY); // Left
+  ctx.moveTo(tlX, tlY);
+  ctx.lineTo(trX, trY);
+  ctx.lineTo(brX, brY);
+  ctx.lineTo(blX, blY);
   ctx.closePath();
   ctx.stroke();
 
