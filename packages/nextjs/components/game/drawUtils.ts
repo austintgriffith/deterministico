@@ -21,6 +21,8 @@ import {
 } from "./constants";
 import {
   AgentPool,
+  DIRECTION_DX,
+  DIRECTION_DY,
   SPRITE_SHEETS,
   SPRITE_SHEET_COLS,
   TEAM_COLORS,
@@ -34,6 +36,7 @@ import {
   TILE_X_SPACING,
   TILE_Y_SPACING,
   TerrainType,
+  VEHICLE_COLLISION_PADDING,
   VEHICLE_FRAME_OFFSETS,
   VEHICLE_TYPES,
 } from "~~/lib/game";
@@ -591,14 +594,33 @@ export function drawAgentDebugMarkers(
       continue;
     }
 
-    // Draw a small crosshair at agent's exact center position (collision point)
+    // Get agent's facing direction
+    const dir = agentPool.direction[i];
+    const pad = VEHICLE_COLLISION_PADDING;
+
+    // Draw a line from center showing the collision padding in facing direction
     ctx.strokeStyle = "#ffff00"; // Yellow
     ctx.lineWidth = 2;
+
+    const aheadX = screenX + DIRECTION_DX[dir] * pad;
+    const aheadY = screenY + DIRECTION_DY[dir] * pad;
+
     ctx.beginPath();
-    ctx.moveTo(screenX - 8, screenY);
-    ctx.lineTo(screenX + 8, screenY);
-    ctx.moveTo(screenX, screenY - 8);
-    ctx.lineTo(screenX, screenY + 8);
+    ctx.moveTo(screenX, screenY);
+    ctx.lineTo(aheadX, aheadY);
+    ctx.stroke();
+
+    // Draw a small circle at the "ahead" collision check point
+    ctx.beginPath();
+    ctx.arc(aheadX, aheadY, 3, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Draw a small crosshair at agent's exact center position (collision point)
+    ctx.beginPath();
+    ctx.moveTo(screenX - 6, screenY);
+    ctx.lineTo(screenX + 6, screenY);
+    ctx.moveTo(screenX, screenY - 6);
+    ctx.lineTo(screenX, screenY + 6);
     ctx.stroke();
 
     // Show calculated tile coordinates and terrain type

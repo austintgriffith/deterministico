@@ -27,6 +27,9 @@ import {
   TerrainType,
 } from "./constants";
 
+/** Padding distance - how far ahead to check in movement direction (pixels) */
+export const VEHICLE_COLLISION_PADDING = 8;
+
 /**
  * Convert a force vector (fx, fy) to the best matching direction index (0-3)
  * Uses isometric coordinate system:
@@ -114,20 +117,21 @@ function isPointOnGround(worldX: number, worldY: number, centerX: number, terrai
 /**
  * Check if a world position is on traversable terrain (ground tiles only).
  * Agents can only drive on "ground" tiles.
- * Uses center-point-only collision for simplicity and to avoid shape mismatch
- * issues with isometric tile geometry.
+ * Checks center point + one point ahead in the movement direction for padding.
  *
  * @param worldX - World X coordinate
  * @param worldY - World Y coordinate
  * @param centerX - X coordinate of map center
  * @param terrainGrid - 2D array of terrain types
- * @returns true if position is traversable (center point on ground)
+ * @param direction - Movement direction (0=N, 1=E, 2=S, 3=W)
+ * @returns true if position is traversable (center + ahead point on ground)
  */
 export function isTraversable(
   worldX: number,
   worldY: number,
   centerX: number,
   terrainGrid: TerrainType[][] | null,
+  direction: number,
 ): boolean {
   // If no terrain grid provided, block all movement to make the issue obvious
   if (!terrainGrid || terrainGrid.length === 0) {
@@ -135,8 +139,19 @@ export function isTraversable(
     return false;
   }
 
-  // Check center point only - simpler and avoids shape mismatch issues
-  return isPointOnGround(worldX, worldY, centerX, terrainGrid);
+  // Check center point
+  if (!isPointOnGround(worldX, worldY, centerX, terrainGrid)) {
+    return false;
+  }
+
+  // Check padding distance ahead in movement direction
+  const aheadX = worldX + DIRECTION_DX[direction] * VEHICLE_COLLISION_PADDING;
+  const aheadY = worldY + DIRECTION_DY[direction] * VEHICLE_COLLISION_PADDING;
+  if (!isPointOnGround(aheadX, aheadY, centerX, terrainGrid)) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -260,7 +275,10 @@ export function updateCommsUnit(
     const newY = myY + DIRECTION_DY[direction[index]] * moveSpeed;
 
     // Check bounds and terrain - only move if within bounds AND on traversable terrain
-    if (isWithinBounds(newX, newY, centerX, gridSize) && isTraversable(newX, newY, centerX, terrainGrid)) {
+    if (
+      isWithinBounds(newX, newY, centerX, gridSize) &&
+      isTraversable(newX, newY, centerX, terrainGrid, direction[index])
+    ) {
       x[index] = newX;
       y[index] = newY;
     } else {
@@ -306,7 +324,7 @@ export function updateNormalAgent(
     const newY = y[index] + DIRECTION_DY[dir] * moveSpeed;
 
     const withinBounds = isWithinBounds(newX, newY, centerX, gridSize);
-    const canTraverse = isTraversable(newX, newY, centerX, terrainGrid);
+    const canTraverse = isTraversable(newX, newY, centerX, terrainGrid, dir);
 
     if (withinBounds && canTraverse) {
       x[index] = newX;
