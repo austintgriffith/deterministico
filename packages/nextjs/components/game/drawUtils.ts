@@ -37,6 +37,7 @@ import {
   TILE_Y_SPACING,
   TerrainType,
   VEHICLE_COLLISION_PADDING,
+  VEHICLE_COLLISION_Y_OFFSET,
   VEHICLE_FRAME_OFFSETS,
   VEHICLE_TYPES,
 } from "~~/lib/game";
@@ -77,7 +78,7 @@ export const LIQUID_LAYER_COLORS = [
 export const TERRAIN_COLORS = {
   ground: "#4a3a5c", // Dark grayish-purple matching the ground tiles
   liquid: "#5ad8d9", // Cyan/teal matching the liquid
-  mushroom: "#6b5b7b", // Slightly lighter purple for mushroom tiles
+  mushroom: "#e066ff", // Bright magenta/purple for special mushroom tiles
   mountain: "#2d1f3d", // Dark purple for mountains
   rubyMountain: "#ff4444", // Glowing red for ruby mountains
 };
@@ -594,19 +595,21 @@ export function drawAgentDebugMarkers(
       continue;
     }
 
-    // Get agent's facing direction
+    // Get agent's facing direction and collision point (offset down from sprite origin)
     const dir = agentPool.direction[i];
     const pad = VEHICLE_COLLISION_PADDING;
+    const collisionX = screenX;
+    const collisionY = screenY + VEHICLE_COLLISION_Y_OFFSET;
 
-    // Draw a line from center showing the collision padding in facing direction
+    // Draw a line from collision center showing the padding in facing direction
     ctx.strokeStyle = "#ffff00"; // Yellow
     ctx.lineWidth = 2;
 
-    const aheadX = screenX + DIRECTION_DX[dir] * pad;
-    const aheadY = screenY + DIRECTION_DY[dir] * pad;
+    const aheadX = collisionX + DIRECTION_DX[dir] * pad;
+    const aheadY = collisionY + DIRECTION_DY[dir] * pad;
 
     ctx.beginPath();
-    ctx.moveTo(screenX, screenY);
+    ctx.moveTo(collisionX, collisionY);
     ctx.lineTo(aheadX, aheadY);
     ctx.stroke();
 
@@ -615,24 +618,23 @@ export function drawAgentDebugMarkers(
     ctx.arc(aheadX, aheadY, 3, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Draw a small crosshair at agent's exact center position (collision point)
+    // Draw a small crosshair at collision center position
     ctx.beginPath();
-    ctx.moveTo(screenX - 6, screenY);
-    ctx.lineTo(screenX + 6, screenY);
-    ctx.moveTo(screenX, screenY - 6);
-    ctx.lineTo(screenX, screenY + 6);
+    ctx.moveTo(collisionX - 6, collisionY);
+    ctx.lineTo(collisionX + 6, collisionY);
+    ctx.moveTo(collisionX, collisionY - 6);
+    ctx.lineTo(collisionX, collisionY + 6);
     ctx.stroke();
 
-    // Show calculated tile coordinates and terrain type
+    // Show calculated tile coordinates
     if (terrainGrid) {
-      const { row, col } = worldToTile(agentPool.x[i], agentPool.y[i], centerX);
+      const { row, col } = worldToTile(agentPool.x[i], agentPool.y[i] + VEHICLE_COLLISION_Y_OFFSET, centerX);
       const terrain =
         row >= 0 && row < terrainGrid.length && col >= 0 && col < terrainGrid[0].length ? terrainGrid[row][col] : "OOB";
 
       ctx.fillStyle = terrain === "ground" ? "#00ff00" : "#ff0000";
       ctx.font = "bold 10px monospace";
       ctx.fillText(`(${row},${col})`, screenX + 12, screenY - 4);
-      ctx.fillText(terrain.substring(0, 3), screenX + 12, screenY + 8);
     }
   }
 

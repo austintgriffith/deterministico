@@ -30,6 +30,9 @@ import {
 /** Padding distance - how far ahead to check in movement direction (pixels) */
 export const VEHICLE_COLLISION_PADDING = 8;
 
+/** Y offset for collision point - shifts collision check down from sprite origin */
+export const VEHICLE_COLLISION_Y_OFFSET = 8;
+
 /**
  * Convert a force vector (fx, fy) to the best matching direction index (0-3)
  * Uses isometric coordinate system:
@@ -275,9 +278,12 @@ export function updateCommsUnit(
     const newY = myY + DIRECTION_DY[direction[index]] * moveSpeed;
 
     // Check bounds and terrain - only move if within bounds AND on traversable terrain
+    // Add Y offset to shift collision point down from sprite origin
+    const collisionX = newX;
+    const collisionY = newY + VEHICLE_COLLISION_Y_OFFSET;
     if (
-      isWithinBounds(newX, newY, centerX, gridSize) &&
-      isTraversable(newX, newY, centerX, terrainGrid, direction[index])
+      isWithinBounds(collisionX, collisionY, centerX, gridSize) &&
+      isTraversable(collisionX, collisionY, centerX, terrainGrid, direction[index])
     ) {
       x[index] = newX;
       y[index] = newY;
@@ -323,8 +329,11 @@ export function updateNormalAgent(
     const newX = x[index] + DIRECTION_DX[dir] * moveSpeed;
     const newY = y[index] + DIRECTION_DY[dir] * moveSpeed;
 
-    const withinBounds = isWithinBounds(newX, newY, centerX, gridSize);
-    const canTraverse = isTraversable(newX, newY, centerX, terrainGrid, dir);
+    // Add Y offset to shift collision point down from sprite origin
+    const collisionX = newX;
+    const collisionY = newY + VEHICLE_COLLISION_Y_OFFSET;
+    const withinBounds = isWithinBounds(collisionX, collisionY, centerX, gridSize);
+    const canTraverse = isTraversable(collisionX, collisionY, centerX, terrainGrid, dir);
 
     if (withinBounds && canTraverse) {
       x[index] = newX;

@@ -16,11 +16,11 @@ export const DIRECTION_SPRITE_POS: [number, number][] = [
 export const VEHICLE_Y_OFFSET = -32;
 
 // Vehicle depth offset for isometric sorting (higher = rendered later/on top)
-// Set to ~1.0 as a compromise between two edge cases:
-// - Higher (1.1+): vehicles render over mountains they should be behind
-// - Lower (0.9-): ground tiles at intersections cover vehicles
-// 0.99 gives vehicles a tiny nudge "behind" to help with mountain occlusion
-export const VEHICLE_DEPTH_OFFSET = 0.99;
+// This balances two edge cases:
+// - Higher (0.9+): vehicles render over mountains to the east they should be behind
+// - Lower (0.4-): ground tiles at intersections cover vehicles
+// 0.5 keeps vehicles in front of ground but behind eastern mountains
+export const VEHICLE_DEPTH_OFFSET = 0.5;
 
 // Ground tile depth offset (negative so ground renders before vehicles)
 // This allows vehicles to render on top of ground tiles they're crossing
