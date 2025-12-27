@@ -4,6 +4,7 @@ import {
   SPRITE_SHEETS,
   TERRAIN_SHEETS,
   TERRAIN_TYPES,
+  TERRAIN_TYPE_INDEX,
   TERRAIN_WEIGHTS,
   TILE_RENDER_HEIGHT,
   TILE_RENDER_WIDTH,
@@ -383,4 +384,73 @@ export function generateSpawnPoints(
   }
 
   return spawns;
+}
+
+// =========================================================================
+// Map Hash Functions (Solidity-compatible)
+// =========================================================================
+
+/**
+ * Pack terrain grid into bytes (Solidity-compatible)
+ * Uses nibble-packing: 4 bits per tile, 2 tiles per byte (high nibble first)
+ *
+ * Matches Solidity MapGenerator.packTerrain() exactly:
+ * - First tile goes in high nibble (bits 7-4)
+ * - Second tile goes in low nibble (bits 3-0)
+ * - Row-major order (row 0, col 0 -> row 0, col 1 -> ... -> row n, col n)
+ *
+ * @param terrain 2D array of terrain types
+ * @returns Packed bytes as Uint8Array
+ */
+export function packTerrain(terrain: TerrainType[][]): Uint8Array {
+  const gridSize = terrain.length;
+  const totalTiles = gridSize * gridSize;
+  const packedLength = Math.ceil(totalTiles / 2); // 2 tiles per byte
+  const packed = new Uint8Array(packedLength);
+
+  let byteIndex = 0;
+  let tileIndex = 0;
+
+  for (let row = 0; row < gridSize; row++) {
+    for (let col = 0; col < gridSize; col++) {
+      const terrainValue = TERRAIN_TYPE_INDEX[terrain[row][col]];
+
+      if (tileIndex % 2 === 0) {
+        // High nibble (first tile in byte)
+        packed[byteIndex] = terrainValue << 4;
+      } else {
+        // Low nibble (second tile in byte) - combine with existing high nibble
+        packed[byteIndex] |= terrainValue;
+        byteIndex++;
+      }
+      tileIndex++;
+    }
+  }
+
+  return packed;
+}
+
+/**
+ * Compute terrain hash (matches Solidity MapGenerator.terrainHash)
+ * Returns keccak256 of the packed terrain bytes
+ *
+ * @param terrain 2D array of terrain types
+ * @returns Hash as hex string (0x-prefixed)
+ */
+export function terrainHash(terrain: TerrainType[][]): `0x${string}` {
+  const packed = packTerrain(terrain);
+  return keccak256(packed);
+}
+
+/**
+ * Generate map and return hash (convenience function)
+ * Matches Solidity MapGeneratorWrapper.generateMapHash()
+ *
+ * @param roll The bytes32 roll hash
+ * @param gridSize Size of the grid to generate
+ * @returns Hash of the generated terrain
+ */
+export function generateMapHash(roll: `0x${string}`, gridSize: number): `0x${string}` {
+  const { terrain } = generateGrid(roll, gridSize);
+  return terrainHash(terrain);
 }

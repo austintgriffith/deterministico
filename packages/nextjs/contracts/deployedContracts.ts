@@ -4,6 +4,537 @@
  */
 import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
-const deployedContracts = {} as const;
+const deployedContracts = {
+  31337: {
+    YourContract: {
+      address: "0xe1da8919f262ee86f9be05059c9280142cf23f48",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "_owner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "receive",
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "greeting",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "string",
+              internalType: "string",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "owner",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "premium",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "setGreeting",
+          inputs: [
+            {
+              name: "_newGreeting",
+              type: "string",
+              internalType: "string",
+            },
+          ],
+          outputs: [],
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "totalCounter",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "userGreetingCounter",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "withdraw",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "event",
+          name: "GreetingChange",
+          inputs: [
+            {
+              name: "greetingSetter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newGreeting",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+            {
+              name: "premium",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+      ],
+      inheritedFunctions: {},
+      deployedOnBlock: 6,
+    },
+    GameMap: {
+      address: "0x0c8e79f3534b00d9a3d4a856b665bf4ebc22f2ba",
+      abi: [
+        {
+          type: "function",
+          name: "advanceRound",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "calculateStorageSlots",
+          inputs: [
+            {
+              name: "gridSize",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "estimateStorageGas",
+          inputs: [
+            {
+              name: "gridSize",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "game",
+          inputs: [],
+          outputs: [
+            {
+              name: "roll",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "gridSize",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "round",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "initialized",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "generateAndStoreMap",
+          inputs: [
+            {
+              name: "roll",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "gridSize",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "getFullMap",
+          inputs: [],
+          outputs: [
+            {
+              name: "terrain",
+              type: "uint8[][]",
+              internalType: "enum MapGenerator.TerrainType[][]",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getTerrain",
+          inputs: [
+            {
+              name: "row",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "col",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "enum MapGenerator.TerrainType",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getTerrainBatch",
+          inputs: [
+            {
+              name: "rows",
+              type: "uint256[]",
+              internalType: "uint256[]",
+            },
+            {
+              name: "cols",
+              type: "uint256[]",
+              internalType: "uint256[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "terrains",
+              type: "uint8[]",
+              internalType: "enum MapGenerator.TerrainType[]",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "isTraversable",
+          inputs: [
+            {
+              name: "row",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "col",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "event",
+          name: "MapGenerated",
+          inputs: [
+            {
+              name: "roll",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "gridSize",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "gasUsed",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundAdvanced",
+          inputs: [
+            {
+              name: "round",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "CoordinatesOutOfBounds",
+          inputs: [
+            {
+              name: "row",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "col",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "gridSize",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "MapAlreadyInitialized",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "MapNotInitialized",
+          inputs: [],
+        },
+      ],
+      inheritedFunctions: {},
+      deployedOnBlock: 7,
+    },
+    MapGeneratorWrapper: {
+      address: "0xed1db453c3156ff3155a97ad217b3087d5dc5f6e",
+      abi: [
+        {
+          type: "function",
+          name: "generateMap",
+          inputs: [
+            {
+              name: "roll",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "gridSize",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "terrain",
+              type: "uint8[][]",
+              internalType: "enum MapGenerator.TerrainType[][]",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "generateMapDefault",
+          inputs: [
+            {
+              name: "roll",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "terrain",
+              type: "uint8[][]",
+              internalType: "enum MapGenerator.TerrainType[][]",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "generateMapHash",
+          inputs: [
+            {
+              name: "roll",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "gridSize",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "generateMapPacked",
+          inputs: [
+            {
+              name: "roll",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "gridSize",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "packed",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "getTileAt",
+          inputs: [
+            {
+              name: "roll",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "row",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "col",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "gridSize",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "enum MapGenerator.TerrainType",
+            },
+          ],
+          stateMutability: "pure",
+        },
+      ],
+      inheritedFunctions: {},
+      deployedOnBlock: 7,
+    },
+  },
+} as const;
 
 export default deployedContracts satisfies GenericContractsDeclaration;

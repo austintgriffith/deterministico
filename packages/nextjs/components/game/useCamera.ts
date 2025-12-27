@@ -157,13 +157,10 @@ export function useCamera() {
     setIsPinching(false);
   }, [handleDragEnd]);
 
-  // Mouse wheel zoom
-  const createWheelHandler = useCallback((canvasRef: React.RefObject<HTMLCanvasElement | null>) => {
-    return (e: React.WheelEvent) => {
+  // Mouse wheel zoom handler creator - returns the handler function for native event listener
+  const createWheelHandler = useCallback(() => {
+    return (e: WheelEvent) => {
       e.preventDefault();
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
 
       const delta = -e.deltaY * ZOOM_SENSITIVITY;
       const oldZoom = zoomRef.current;
@@ -171,7 +168,10 @@ export function useCamera() {
 
       if (newZoom === oldZoom) return;
 
-      const rect = canvas.getBoundingClientRect();
+      const target = e.currentTarget as HTMLCanvasElement;
+      if (!target) return;
+
+      const rect = target.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 

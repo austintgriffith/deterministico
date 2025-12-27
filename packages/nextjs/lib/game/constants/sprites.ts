@@ -21,7 +21,7 @@ export const TILE_RENDER_HEIGHT = 200;
 // Surface layout (isometric spacing)
 export const TILE_X_SPACING = 89; // horizontal offset between tiles
 export const TILE_Y_SPACING = 47; // vertical offset between tiles
-export const GRID_SIZE = 111; // 111x111 grid (odd number so there's a true center tile)
+export const GRID_SIZE = 32; // 32x32 grid (optimized for on-chain deployment)
 
 // Legacy tile dimensions (used for map bounds calculations)
 export const TILE_WIDTH = TILE_RENDER_WIDTH;

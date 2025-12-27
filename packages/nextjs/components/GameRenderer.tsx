@@ -274,7 +274,19 @@ export function GameRenderer({
 
   // Create event handlers that need canvas ref
   const handleTouchMove = createTouchMoveHandler(canvasRef);
-  const handleWheel = createWheelHandler(canvasRef);
+
+  // Wheel zoom - use native event listener with { passive: false } to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const wheelHandler = createWheelHandler();
+    container.addEventListener("wheel", wheelHandler, { passive: false });
+
+    return () => {
+      container.removeEventListener("wheel", wheelHandler);
+    };
+  }, [createWheelHandler]);
 
   return (
     <div
@@ -287,7 +299,6 @@ export function GameRenderer({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onWheel={handleWheel}
       style={{ touchAction: "none" }}
     >
       {imagesLoaded && <canvas ref={canvasRef} className="block w-full h-full" />}

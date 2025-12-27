@@ -56,5 +56,5 @@ export const VEHICLE_TYPES = [
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
 
 // Team configuration
-export const NUM_TEAMS = 12;
+export const NUM_TEAMS = 1; // Single team for initial simulation
 export const MIN_SPAWN_DISTANCE = 800; // Minimum pixels between team spawns

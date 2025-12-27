@@ -39,6 +39,17 @@ export const TERRAIN_WEIGHTS: Record<TerrainType, number> = {
   undiscovered: 0, // Not naturally generated - applied programmatically for fog of war
 };
 
+// Terrain type to numeric index (must match Solidity MapGenerator.TerrainType enum order)
+// Solidity: enum TerrainType { Ground=0, Mountain=1, Liquid=2, Mushroom=3, RubyMountain=4 }
+export const TERRAIN_TYPE_INDEX: Record<TerrainType, number> = {
+  ground: 0,
+  mountain: 1,
+  liquid: 2,
+  mushroom: 3,
+  rubyMountain: 4,
+  undiscovered: 5, // Not used in map hash - render-only type
+};
+
 // Terrain types in order for weighted selection (undiscovered excluded - not naturally generated)
 export const TERRAIN_TYPES: TerrainType[] = ["ground", "mountain", "liquid", "mushroom", "rubyMountain"];
 

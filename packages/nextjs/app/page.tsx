@@ -6,6 +6,7 @@ import { DeterministicDice } from "deterministic-dice";
 import type { NextPage } from "next";
 import { keccak256, toHex } from "viem";
 import { GameRenderer } from "~~/components/GameRenderer";
+import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import {
   AgentPool,
   GRID_SIZE,
@@ -22,7 +23,41 @@ import {
   generateSpawnPoints,
   worldToTile,
 } from "~~/lib/game";
-import type { SpawnPoint } from "~~/lib/game";
+import type { SpawnPoint, TerrainType } from "~~/lib/game";
+
+// Map Solidity enum values to TypeScript terrain types
+const SOLIDITY_TO_TS_TERRAIN: Record<number, TerrainType> = {
+  0: "ground",
+  1: "mountain",
+  2: "liquid",
+  3: "mushroom",
+  4: "rubyMountain",
+};
+
+/**
+ * Compare TypeScript terrain grid with Solidity contract output.
+ * Returns true if they match exactly, false otherwise.
+ */
+function checkMapParity(
+  tsGrid: TerrainType[][] | undefined,
+  solidityGrid: readonly (readonly number[])[] | undefined,
+): boolean {
+  if (!tsGrid || !solidityGrid) return false;
+  if (tsGrid.length !== solidityGrid.length) return false;
+
+  for (let row = 0; row < tsGrid.length; row++) {
+    if (tsGrid[row].length !== solidityGrid[row].length) return false;
+    for (let col = 0; col < tsGrid[row].length; col++) {
+      const tsTerrain = tsGrid[row][col];
+      const solTerrain = SOLIDITY_TO_TS_TERRAIN[solidityGrid[row][col]];
+      if (tsTerrain !== solTerrain) {
+        console.warn(`Parity mismatch at [${row},${col}]: TS=${tsTerrain}, Sol=${solTerrain}`);
+        return false;
+      }
+    }
+  }
+  return true;
+}
 
 /**
  * Reveal tiles around a given tile coordinate (center + 8 neighbors).
@@ -84,6 +119,71 @@ const HomeContent = () => {
     if (!roll) return null;
     return generateGrid(roll as `0x${string}`, GRID_SIZE);
   }, [roll]);
+
+  // Get deployed contract info for debugging
+  const { data: mapGeneratorContract } = useDeployedContractInfo({ contractName: "MapGeneratorWrapper" });
+
+  // Call Solidity contract to generate map for parity verification
+  const {
+    data: solidityMap,
+    isLoading: isLoadingSolidityMap,
+    error: solidityMapError,
+    isError: isSolidityMapError,
+    status: solidityMapStatus,
+    fetchStatus,
+  } = useScaffoldReadContract({
+    contractName: "MapGeneratorWrapper",
+    functionName: "generateMapDefault",
+    args: [roll as `0x${string}`],
+    query: {
+      enabled: !!roll && !!mapGeneratorContract,
+    },
+  });
+
+  // Debug logging for Solidity contract call
+  useEffect(() => {
+    console.log("🔍 Solidity Map Debug:", {
+      roll,
+      hasMapGeneratorContract: !!mapGeneratorContract,
+      mapGeneratorContractAddress: mapGeneratorContract?.address,
+      status: solidityMapStatus,
+      fetchStatus,
+      isLoading: isLoadingSolidityMap,
+      isError: isSolidityMapError,
+      error: solidityMapError?.message || solidityMapError,
+      hasData: !!solidityMap,
+      dataLength: solidityMap?.length,
+      firstRow: solidityMap?.[0]?.slice(0, 5),
+    });
+  }, [
+    roll,
+    mapGeneratorContract,
+    solidityMapStatus,
+    fetchStatus,
+    isLoadingSolidityMap,
+    isSolidityMapError,
+    solidityMapError,
+    solidityMap,
+  ]);
+
+  // Check parity between TypeScript and Solidity map generation
+  const parityStatus = useMemo(() => {
+    if (!roll) return null;
+    if (!mapGeneratorContract) return "loading"; // Contract not loaded yet
+    if (isLoadingSolidityMap || fetchStatus === "fetching") return "loading";
+    if (isSolidityMapError) return "error";
+    if (!solidityMap) return "loading"; // Still waiting for data
+    const isParity = checkMapParity(gridData?.terrain, solidityMap);
+    return isParity ? "match" : "mismatch";
+  }, [
+    roll,
+    mapGeneratorContract,
+    gridData?.terrain,
+    solidityMap,
+    isLoadingSolidityMap,
+    isSolidityMapError,
+    fetchStatus,
+  ]);
 
   // Initialize agent pool and team spawn points when roll changes
   useEffect(() => {
@@ -216,6 +316,22 @@ const HomeContent = () => {
             Round: {round} / {MAX_ROUNDS}
           </div>
           <div className="mt-1">Agents: {agentPoolRef.current.count}</div>
+          <div className="mt-2 flex items-center gap-2">
+            <span>Solidity Parity:</span>
+            {parityStatus === "loading" && <span className="text-yellow-400">⏳</span>}
+            {parityStatus === "match" && <span className="text-green-400">✓</span>}
+            {parityStatus === "mismatch" && <span className="text-red-400">✗</span>}
+            {parityStatus === "error" && (
+              <span className="text-orange-400" title={solidityMapError?.message || "Unknown error"}>
+                ⚠
+              </span>
+            )}
+          </div>
+          {isSolidityMapError && (
+            <div className="mt-1 text-orange-400 text-xs max-w-[250px] break-words">
+              {solidityMapError?.message?.slice(0, 100) || "Contract call failed"}
+            </div>
+          )}
         </div>
       )}
 
