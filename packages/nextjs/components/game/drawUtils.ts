@@ -23,6 +23,7 @@ import {
   AgentPool,
   DIRECTION_DX,
   DIRECTION_DY,
+  FIXED_POINT_SCALE,
   SPRITE_SHEETS,
   SPRITE_SHEET_COLS,
   TEAM_COLORS,
@@ -50,6 +51,14 @@ import type {
   SpawnPoint,
   TileData,
 } from "~~/lib/game";
+
+/**
+ * Convert fixed-point position to world coordinate.
+ * Agent positions are stored as fixed-point (x100) for Solidity parity.
+ */
+function toWorld(fixedPoint: number): number {
+  return fixedPoint / FIXED_POINT_SCALE;
+}
 
 // Direction to frame index mapping
 // Direction indices: 0=north, 1=east, 2=south, 3=west
@@ -262,8 +271,10 @@ export function createDrawables(
   // Add all agents to the drawable list
   // Apply depth offset so vehicles render on top of tiles at boundaries
   // Use exact depth (no rounding) so vehicles sort correctly relative to each other
+  // Note: Agent positions are in fixed-point, need to convert to world coordinates
   for (let i = 0; i < agentPool.count; i++) {
-    const depth = worldToTileDepthExact(agentPool.x[i], agentPool.y[i], centerX) + VEHICLE_DEPTH_OFFSET;
+    const depth =
+      worldToTileDepthExact(toWorld(agentPool.x[i]), toWorld(agentPool.y[i]), centerX) + VEHICLE_DEPTH_OFFSET;
     const agent: DrawableAgent = {
       type: "agent",
       depth,
@@ -578,8 +589,11 @@ export function drawAgentDebugMarkers(
   ctx.save();
 
   for (let i = 0; i < agentPool.count; i++) {
-    const screenX = agentPool.x[i] - cameraX;
-    const screenY = agentPool.y[i] - cameraY;
+    // Convert from fixed-point to world coordinates for rendering
+    const worldX = toWorld(agentPool.x[i]);
+    const worldY = toWorld(agentPool.y[i]);
+    const screenX = worldX - cameraX;
+    const screenY = worldY - cameraY;
 
     // Only draw if visible
     if (screenX < -20 || screenX > visibleWidth + 20 || screenY < -20 || screenY > visibleHeight + 20) {
@@ -590,14 +604,15 @@ export function drawAgentDebugMarkers(
     const dir = agentPool.direction[i];
     const pad = VEHICLE_COLLISION_PADDING;
     const collisionX = screenX;
-    const collisionY = screenY + VEHICLE_COLLISION_Y_OFFSET;
+    const collisionY = screenY + toWorld(VEHICLE_COLLISION_Y_OFFSET);
 
     // Draw a line from collision center showing the padding in facing direction
+    // DIRECTION_DX/DY are scaled x100, so divide by FIXED_POINT_SCALE for display
     ctx.strokeStyle = "#ffff00"; // Yellow
     ctx.lineWidth = 2;
 
-    const aheadX = collisionX + DIRECTION_DX[dir] * pad;
-    const aheadY = collisionY + DIRECTION_DY[dir] * pad;
+    const aheadX = collisionX + toWorld(DIRECTION_DX[dir]) * pad;
+    const aheadY = collisionY + toWorld(DIRECTION_DY[dir]) * pad;
 
     ctx.beginPath();
     ctx.moveTo(collisionX, collisionY);
@@ -618,8 +633,13 @@ export function drawAgentDebugMarkers(
     ctx.stroke();
 
     // Show calculated tile coordinates
+    // Note: worldToTile expects fixed-point values, so pass the original fixed-point positions
     if (terrainGrid) {
-      const { row, col } = worldToTile(agentPool.x[i], agentPool.y[i] + VEHICLE_COLLISION_Y_OFFSET, centerX);
+      const { row, col } = worldToTile(
+        agentPool.x[i],
+        agentPool.y[i] + VEHICLE_COLLISION_Y_OFFSET,
+        centerX * FIXED_POINT_SCALE,
+      );
       const terrain =
         row >= 0 && row < terrainGrid.length && col >= 0 && col < terrainGrid[0].length ? terrainGrid[row][col] : "OOB";
 
@@ -752,10 +772,10 @@ export function drawAllSorted(
         drawFlag(ctx, flagScreenX, flagScreenY, hexColor);
       }
     } else if (drawable.type === "agent") {
-      // Draw agent
+      // Draw agent - convert from fixed-point to world coordinates
       const i = drawable.index;
-      const screenX = agentPool.x[i] - 32 - cameraX;
-      const screenY = agentPool.y[i] + VEHICLE_Y_OFFSET - cameraY;
+      const screenX = toWorld(agentPool.x[i]) - 32 - cameraX;
+      const screenY = toWorld(agentPool.y[i]) + VEHICLE_Y_OFFSET - cameraY;
 
       // Only draw if visible
       if (screenX + 64 > 0 && screenX < visibleWidth && screenY + 64 > 0 && screenY < visibleHeight) {
@@ -952,9 +972,9 @@ export function drawMinimap(
     ctx.strokeRect(flagPos.x - tileMinimapSize / 2, flagPos.y - tileMinimapSize / 2, tileMinimapSize, tileMinimapSize);
   }
 
-  // Draw each agent on the minimap
+  // Draw each agent on the minimap - convert from fixed-point to world coordinates
   for (let i = 0; i < agentPool.count; i++) {
-    const agentPos = worldToMinimapPos(agentPool.x[i], agentPool.y[i]);
+    const agentPos = worldToMinimapPos(toWorld(agentPool.x[i]), toWorld(agentPool.y[i]));
 
     // Skip agents outside minimap bounds
     if (

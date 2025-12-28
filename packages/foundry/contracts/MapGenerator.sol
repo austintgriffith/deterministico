@@ -11,7 +11,7 @@ pragma solidity >=0.8.0 <0.9.0;
  *      2. Weighted terrain type assignment per tile
  *      3. Cellular automata smoothing (2 passes)
  */
-library MapGenerator {
+contract MapGenerator {
     /// @notice Terrain types matching TypeScript TerrainType
     /// @dev Order matters - must match: ground=0, mountain=1, liquid=2, mushroom=3, rubyMountain=4
     enum TerrainType { Ground, Mountain, Liquid, Mushroom, RubyMountain }
@@ -164,7 +164,26 @@ library MapGenerator {
      * @param gridSize Size of the grid to generate
      * @return terrain 2D array of terrain types
      */
-    function generateMap(bytes32 roll, uint256 gridSize) internal pure returns (TerrainType[][] memory terrain) {
+    function generateMap(bytes32 roll, uint256 gridSize) external pure returns (TerrainType[][] memory terrain) {
+        return _generateMap(roll, gridSize);
+    }
+
+    /**
+     * @notice Generate a terrain map with default grid size (32x32)
+     * @param roll The bytes32 roll hash
+     * @return terrain 2D array of terrain types
+     */
+    function generateMapDefault(bytes32 roll) external pure returns (TerrainType[][] memory terrain) {
+        return _generateMap(roll, DEFAULT_GRID_SIZE);
+    }
+
+    /**
+     * @notice Internal map generation logic
+     * @param roll The bytes32 roll hash
+     * @param gridSize Size of the grid to generate
+     * @return terrain 2D array of terrain types
+     */
+    function _generateMap(bytes32 roll, uint256 gridSize) internal pure returns (TerrainType[][] memory terrain) {
         // Phase 1: Derive seed from roll hash (matches TypeScript exactly)
         // TypeScript: keccak256(encodePacked(roll, "map"))
         uint256 seed = uint256(keccak256(abi.encodePacked(roll, "map")));
@@ -186,15 +205,6 @@ library MapGenerator {
     }
 
     /**
-     * @notice Generate a terrain map with default grid size (111x111)
-     * @param roll The bytes32 roll hash
-     * @return terrain 2D array of terrain types
-     */
-    function generateMap(bytes32 roll) internal pure returns (TerrainType[][] memory terrain) {
-        return generateMap(roll, DEFAULT_GRID_SIZE);
-    }
-
-    /**
      * @notice Get a single tile's terrain type
      * @dev Useful for on-chain queries without generating the full map.
      *      Note: This applies full generation + smoothing for accuracy,
@@ -205,10 +215,32 @@ library MapGenerator {
      * @param gridSize Size of the grid
      * @return The terrain type at the specified position
      */
-    function getTileAt(bytes32 roll, uint256 row, uint256 col, uint256 gridSize) internal pure returns (TerrainType) {
-        TerrainType[][] memory terrain = generateMap(roll, gridSize);
+    function getTileAt(bytes32 roll, uint256 row, uint256 col, uint256 gridSize) external pure returns (TerrainType) {
+        TerrainType[][] memory terrain = _generateMap(roll, gridSize);
         require(row < gridSize && col < gridSize, "MapGenerator: coordinates out of bounds");
         return terrain[row][col];
+    }
+
+    /**
+     * @notice Generate and pack terrain map for efficient transmission
+     * @param roll The bytes32 roll hash
+     * @param gridSize Size of the grid to generate
+     * @return packed Packed bytes representation (2 tiles per byte)
+     */
+    function generateMapPacked(bytes32 roll, uint256 gridSize) external pure returns (bytes memory packed) {
+        TerrainType[][] memory terrain = _generateMap(roll, gridSize);
+        return _packTerrain(terrain);
+    }
+
+    /**
+     * @notice Generate terrain hash for verification
+     * @param roll The bytes32 roll hash
+     * @param gridSize Size of the grid to generate
+     * @return Hash of the terrain grid
+     */
+    function generateMapHash(bytes32 roll, uint256 gridSize) external pure returns (bytes32) {
+        TerrainType[][] memory terrain = _generateMap(roll, gridSize);
+        return keccak256(_packTerrain(terrain));
     }
 
     /**
@@ -218,7 +250,7 @@ library MapGenerator {
      * @param terrain The terrain grid to pack
      * @return packed Packed bytes representation
      */
-    function packTerrain(TerrainType[][] memory terrain) internal pure returns (bytes memory packed) {
+    function _packTerrain(TerrainType[][] memory terrain) internal pure returns (bytes memory packed) {
         uint256 gridSize = terrain.length;
         uint256 totalTiles = gridSize * gridSize;
         uint256 packedLength = (totalTiles + 1) / 2; // 2 tiles per byte
@@ -245,15 +277,4 @@ library MapGenerator {
 
         return packed;
     }
-
-    /**
-     * @notice Compute a commitment hash of the terrain grid
-     * @dev Useful for verifying map integrity without storing the full grid
-     * @param terrain The terrain grid
-     * @return Hash of the packed terrain data
-     */
-    function terrainHash(TerrainType[][] memory terrain) internal pure returns (bytes32) {
-        return keccak256(packTerrain(terrain));
-    }
 }
-

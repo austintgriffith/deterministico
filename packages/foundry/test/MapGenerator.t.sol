@@ -3,13 +3,12 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../contracts/MapGenerator.sol";
-import "../contracts/MapGeneratorWrapper.sol";
 
 contract MapGeneratorTest is Test {
-    MapGeneratorWrapper public wrapper;
+    MapGenerator public mapGenerator;
 
     function setUp() public {
-        wrapper = new MapGeneratorWrapper();
+        mapGenerator = new MapGenerator();
     }
 
     /// @notice Test that map generation is deterministic (same seed = same output)
@@ -17,8 +16,8 @@ contract MapGeneratorTest is Test {
         bytes32 roll = keccak256("test_seed_1");
         uint256 gridSize = 21; // Small grid for gas efficiency
 
-        MapGenerator.TerrainType[][] memory map1 = wrapper.generateMap(roll, gridSize);
-        MapGenerator.TerrainType[][] memory map2 = wrapper.generateMap(roll, gridSize);
+        MapGenerator.TerrainType[][] memory map1 = mapGenerator.generateMap(roll, gridSize);
+        MapGenerator.TerrainType[][] memory map2 = mapGenerator.generateMap(roll, gridSize);
 
         // Verify all tiles match
         for (uint256 row = 0; row < gridSize; row++) {
@@ -34,8 +33,8 @@ contract MapGeneratorTest is Test {
         bytes32 roll2 = keccak256("seed_beta");
         uint256 gridSize = 21;
 
-        MapGenerator.TerrainType[][] memory map1 = wrapper.generateMap(roll1, gridSize);
-        MapGenerator.TerrainType[][] memory map2 = wrapper.generateMap(roll2, gridSize);
+        MapGenerator.TerrainType[][] memory map1 = mapGenerator.generateMap(roll1, gridSize);
+        MapGenerator.TerrainType[][] memory map2 = mapGenerator.generateMap(roll2, gridSize);
 
         // Count differences - should have at least some
         uint256 differences = 0;
@@ -56,7 +55,7 @@ contract MapGeneratorTest is Test {
         bytes32 roll = keccak256("terrain_test");
         uint256 gridSize = 31;
 
-        MapGenerator.TerrainType[][] memory map = wrapper.generateMap(roll, gridSize);
+        MapGenerator.TerrainType[][] memory map = mapGenerator.generateMap(roll, gridSize);
 
         for (uint256 row = 0; row < gridSize; row++) {
             for (uint256 col = 0; col < gridSize; col++) {
@@ -72,7 +71,7 @@ contract MapGeneratorTest is Test {
         uint256 gridSize = 51; // Larger grid for better statistics
         uint256 totalTiles = gridSize * gridSize;
 
-        MapGenerator.TerrainType[][] memory map = wrapper.generateMap(roll, gridSize);
+        MapGenerator.TerrainType[][] memory map = mapGenerator.generateMap(roll, gridSize);
 
         // Count each terrain type
         uint256[5] memory counts;
@@ -100,7 +99,7 @@ contract MapGeneratorTest is Test {
         bytes32 roll = keccak256("tile_at_test");
         uint256 gridSize = 21;
 
-        MapGenerator.TerrainType[][] memory map = wrapper.generateMap(roll, gridSize);
+        MapGenerator.TerrainType[][] memory map = mapGenerator.generateMap(roll, gridSize);
 
         // Check several random positions
         uint256[] memory testRows = new uint256[](5);
@@ -112,7 +111,7 @@ contract MapGeneratorTest is Test {
         testRows[4] = 15; testCols[4] = 5;
 
         for (uint256 i = 0; i < 5; i++) {
-            MapGenerator.TerrainType tile = wrapper.getTileAt(roll, testRows[i], testCols[i], gridSize);
+            MapGenerator.TerrainType tile = mapGenerator.getTileAt(roll, testRows[i], testCols[i], gridSize);
             assertEq(
                 uint256(tile), 
                 uint256(map[testRows[i]][testCols[i]]), 
@@ -126,7 +125,7 @@ contract MapGeneratorTest is Test {
         bytes32 roll = keccak256("packed_test");
         uint256 gridSize = 21;
 
-        bytes memory packed = wrapper.generateMapPacked(roll, gridSize);
+        bytes memory packed = mapGenerator.generateMapPacked(roll, gridSize);
         
         // 21x21 = 441 tiles, 2 tiles per byte = 221 bytes (rounded up)
         uint256 expectedLength = (gridSize * gridSize + 1) / 2;
@@ -138,8 +137,8 @@ contract MapGeneratorTest is Test {
         bytes32 roll = keccak256("hash_test");
         uint256 gridSize = 21;
 
-        bytes32 hash1 = wrapper.generateMapHash(roll, gridSize);
-        bytes32 hash2 = wrapper.generateMapHash(roll, gridSize);
+        bytes32 hash1 = mapGenerator.generateMapHash(roll, gridSize);
+        bytes32 hash2 = mapGenerator.generateMapHash(roll, gridSize);
 
         assertEq(hash1, hash2, "Terrain hash should be deterministic");
     }
@@ -150,8 +149,8 @@ contract MapGeneratorTest is Test {
         bytes32 roll2 = keccak256("hash_seed_2");
         uint256 gridSize = 21;
 
-        bytes32 hash1 = wrapper.generateMapHash(roll1, gridSize);
-        bytes32 hash2 = wrapper.generateMapHash(roll2, gridSize);
+        bytes32 hash1 = mapGenerator.generateMapHash(roll1, gridSize);
+        bytes32 hash2 = mapGenerator.generateMapHash(roll2, gridSize);
 
         assertTrue(hash1 != hash2, "Different seeds should produce different hashes");
     }
@@ -161,7 +160,7 @@ contract MapGeneratorTest is Test {
         bytes32 roll = keccak256("minimal_test");
         uint256 gridSize = 1;
 
-        MapGenerator.TerrainType[][] memory map = wrapper.generateMap(roll, gridSize);
+        MapGenerator.TerrainType[][] memory map = mapGenerator.generateMap(roll, gridSize);
         
         assertEq(map.length, 1, "Grid should have 1 row");
         assertEq(map[0].length, 1, "Grid should have 1 column");
@@ -175,7 +174,7 @@ contract MapGeneratorTest is Test {
         bytes32 roll = bytes32(uint256(0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef));
         uint256 gridSize = 32; // Matches TypeScript GRID_SIZE
 
-        MapGenerator.TerrainType[][] memory map = wrapper.generateMap(roll, gridSize);
+        MapGenerator.TerrainType[][] memory map = mapGenerator.generateMap(roll, gridSize);
 
         // Output the terrain grid for comparison
         emit log("=== PARITY TEST OUTPUT ===");
@@ -211,7 +210,7 @@ contract MapGeneratorTest is Test {
     }
 
     function _outputMapForParity(bytes32 roll, uint256 gridSize, string memory label) internal {
-        MapGenerator.TerrainType[][] memory map = wrapper.generateMap(roll, gridSize);
+        MapGenerator.TerrainType[][] memory map = mapGenerator.generateMap(roll, gridSize);
         
         emit log(string(abi.encodePacked("=== ", label, " ===")));
         emit log_named_bytes32("Roll", roll);
@@ -259,19 +258,19 @@ contract MapGeneratorTest is Test {
         
         // Test small grid
         uint256 startGas = gasleft();
-        wrapper.generateMap(roll, 11);
+        mapGenerator.generateMap(roll, 11);
         uint256 gas11 = startGas - gasleft();
         emit log_named_uint("Gas for 11x11 grid", gas11);
 
         // Test medium grid  
         startGas = gasleft();
-        wrapper.generateMap(roll, 21);
+        mapGenerator.generateMap(roll, 21);
         uint256 gas21 = startGas - gasleft();
         emit log_named_uint("Gas for 21x21 grid", gas21);
 
         // Test larger grid
         startGas = gasleft();
-        wrapper.generateMap(roll, 31);
+        mapGenerator.generateMap(roll, 31);
         uint256 gas31 = startGas - gasleft();
         emit log_named_uint("Gas for 31x31 grid", gas31);
     }
@@ -294,7 +293,7 @@ contract MapGeneratorTest is Test {
         
         for (uint256 i = 0; i < rolls.length; i++) {
             bytes32 roll = rolls[i];
-            bytes32 mapHash = wrapper.generateMapHash(roll, gridSize);
+            bytes32 mapHash = mapGenerator.generateMapHash(roll, gridSize);
             
             // Output in format that mapHashParityTest.js can parse
             // Format: "Hash for 0x...: 0x..."
@@ -320,4 +319,3 @@ contract MapGeneratorTest is Test {
         return string(str);
     }
 }
-

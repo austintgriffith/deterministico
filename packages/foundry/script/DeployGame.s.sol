@@ -3,13 +3,17 @@ pragma solidity ^0.8.19;
 
 import "./DeployHelpers.s.sol";
 import "../contracts/GameMap.sol";
-import "../contracts/MapGeneratorWrapper.sol";
+import "../contracts/MapGenerator.sol";
+import "../contracts/GameFactory.sol";
+import "../contracts/ChallengeExecutor.sol";
 
 /**
  * @notice Deploy script for game contracts
  * @dev Deploys:
+ *      - MapGenerator: Pure map generation contract
  *      - GameMap: Main game state storage
- *      - MapGeneratorWrapper: Pure map generation for verification/parity checks
+ *      - GameFactory: Pay-to-play game creation with seed reveal
+ *      - ChallengeExecutor: On-chain challenge verification
  *
  * Example:
  * yarn deploy --file DeployGame.s.sol  # local anvil chain
@@ -26,11 +30,19 @@ contract DeployGame is ScaffoldETHDeploy {
      *      - Export contract addresses & ABIs to `nextjs` packages
      */
     function run() external ScaffoldEthDeployerRunner {
-        // Deploy GameMap for game state storage
-        new GameMap();
+        // Deploy MapGenerator contract for pure map generation
+        MapGenerator mapGenerator = new MapGenerator();
         
-        // Deploy MapGeneratorWrapper for pure map generation (parity verification)
-        new MapGeneratorWrapper();
+        // Deploy GameMap for game state storage (requires MapGenerator)
+        new GameMap(mapGenerator);
+        
+        // Deploy GameFactory for pay-to-play game creation
+        GameFactory gameFactory = new GameFactory(deployer);
+        
+        // Fund the pool with 1 ETH for player payouts
+        gameFactory.depositToPool{value: 1 ether}();
+        
+        // Deploy ChallengeExecutor for on-chain challenge verification
+        new ChallengeExecutor(address(gameFactory), address(mapGenerator));
     }
 }
-

@@ -1,11 +1,11 @@
 /**
  * Map Hash Parity Test
- * 
+ *
  * Verifies that TypeScript and Solidity produce identical terrain hashes.
  * This tests the packTerrain and terrainHash functions match exactly.
- * 
+ *
  * Usage: node mapHashParityTest.js [gridSize]
- * 
+ *
  * Example: node mapHashParityTest.js 32
  */
 
@@ -36,13 +36,26 @@ const TERRAIN_WEIGHTS = {
 };
 
 // Terrain type order for weighted selection
-const TERRAIN_ORDER = ["Ground", "Mountain", "Liquid", "Mushroom", "RubyMountain"];
+const TERRAIN_ORDER = [
+  "Ground",
+  "Mountain",
+  "Liquid",
+  "Mushroom",
+  "RubyMountain",
+];
 
 /**
  * Keccak256-based hash function for position-based randomness
  */
 function hash(x, y, seed) {
-  return BigInt(keccak256(encodePacked(["uint256", "uint256", "uint256"], [BigInt(x), BigInt(y), seed])));
+  return BigInt(
+    keccak256(
+      encodePacked(
+        ["uint256", "uint256", "uint256"],
+        [BigInt(x), BigInt(y), seed]
+      )
+    )
+  );
 }
 
 /**
@@ -111,7 +124,9 @@ function smoothTerrainGrid(grid, passNumber, seed) {
       if (maxCount === currentCount) {
         newRow.push(currentType);
       } else if (maxCount - currentCount <= 2) {
-        const tieBreaker = Number(hash(row + passNumber * 1000, col + passNumber * 1000, seed) % 100n);
+        const tieBreaker = Number(
+          hash(row + passNumber * 1000, col + passNumber * 1000, seed) % 100n
+        );
         if (tieBreaker < 40) {
           newRow.push(currentType);
         } else {
@@ -132,7 +147,9 @@ function smoothTerrainGrid(grid, passNumber, seed) {
  */
 function generateMapTS(roll, gridSize) {
   // Derive seed (must match Solidity)
-  const seed = BigInt(keccak256(encodePacked(["bytes32", "string"], [roll, "map"])));
+  const seed = BigInt(
+    keccak256(encodePacked(["bytes32", "string"], [roll, "map"]))
+  );
 
   // Phase 1: Initial terrain assignment
   let grid = [];
@@ -158,7 +175,7 @@ function generateMapTS(roll, gridSize) {
 /**
  * Pack terrain grid into bytes (Solidity-compatible)
  * 4 bits per tile, 2 tiles per byte (high nibble first)
- * 
+ *
  * Matches Solidity MapGenerator.packTerrain() exactly.
  */
 function packTerrain(terrain) {
@@ -199,7 +216,7 @@ function terrainHash(terrain) {
 }
 
 /**
- * Generate map and return hash (matches Solidity MapGeneratorWrapper.generateMapHash)
+ * Generate map and return hash (matches Solidity MapGenerator.generateMapHash)
  */
 function generateMapHashTS(roll, gridSize) {
   const terrain = generateMapTS(roll, gridSize);
@@ -216,7 +233,7 @@ function generateMapHashTS(roll, gridSize) {
 function parseSolidityHashOutput(output) {
   const results = {};
   const lines = output.split("\n");
-  
+
   for (const line of lines) {
     // Match lines like: "Hash for 0x123...abc: 0xdef...789"
     const match = line.match(/Hash for (0x[a-fA-F0-9]+):\s*(0x[a-fA-F0-9]+)/);
@@ -224,7 +241,7 @@ function parseSolidityHashOutput(output) {
       results[match[1].toLowerCase()] = match[2].toLowerCase();
     }
   }
-  
+
   return results;
 }
 
@@ -234,7 +251,7 @@ function parseSolidityHashOutput(output) {
 
 function main() {
   const gridSize = parseInt(process.argv[2]) || 32;
-  
+
   console.log("═".repeat(70));
   console.log("  MAP HASH PARITY TEST - TypeScript vs Solidity");
   console.log("═".repeat(70));
@@ -244,42 +261,46 @@ function main() {
 
   // Test seeds
   const testSeeds = [
-    { 
-      label: "Seed 1", 
-      roll: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" 
+    {
+      label: "Seed 1",
+      roll: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     },
-    { 
-      label: "Seed 2 (parity_test_seed_0)", 
-      roll: "0x5b5ee78532e82467429bcf43d5f3c8aa93f5e74dd98f9da1e94bac36cbe5b239" 
+    {
+      label: "Seed 2 (parity_test_seed_0)",
+      roll: "0x5b5ee78532e82467429bcf43d5f3c8aa93f5e74dd98f9da1e94bac36cbe5b239",
     },
-    { 
-      label: "Seed 3 (parity_test_seed_1)", 
-      roll: "0xd285e050369454839a99ae311b1148479a668ce4fcff45301674e5d29d0bd6a6" 
+    {
+      label: "Seed 3 (parity_test_seed_1)",
+      roll: "0xd285e050369454839a99ae311b1148479a668ce4fcff45301674e5d29d0bd6a6",
     },
-    { 
-      label: "Seed 4 (parity_test_seed_2)", 
-      roll: "0x2cfcbe2b3f334995d5cace24ae66ae2e22c1b93ce36ddd21720e129883c67695" 
+    {
+      label: "Seed 4 (parity_test_seed_2)",
+      roll: "0x2cfcbe2b3f334995d5cace24ae66ae2e22c1b93ce36ddd21720e129883c67695",
     },
   ];
 
   // Run Solidity test to get hashes
   console.log("Running Solidity hash test...\n");
   let solidityHashes = {};
-  
+
   try {
     const output = execSync(
       `forge test --match-test "test_HashParityOutput" -vvv 2>&1`,
       { encoding: "utf8", cwd: process.cwd() }
     );
     solidityHashes = parseSolidityHashOutput(output);
-    
+
     if (Object.keys(solidityHashes).length === 0) {
       console.log("⚠️  No hash output found from Solidity test.");
-      console.log("    Make sure test_HashParityOutput exists in MapGenerator.t.sol\n");
+      console.log(
+        "    Make sure test_HashParityOutput exists in MapGenerator.t.sol\n"
+      );
       console.log("    Running TypeScript-only tests...\n");
     }
   } catch (error) {
-    console.log("⚠️  Could not run Solidity test. Running TypeScript-only tests.\n");
+    console.log(
+      "⚠️  Could not run Solidity test. Running TypeScript-only tests.\n"
+    );
   }
 
   let passCount = 0;
@@ -303,7 +324,7 @@ function main() {
 
     // Get Solidity hash
     const solHash = solidityHashes[roll.toLowerCase()];
-    
+
     if (solHash) {
       console.log(`\n📙 Solidity:`);
       console.log(`   Hash: ${solHash}`);
@@ -337,13 +358,17 @@ function main() {
 
   if (failCount === 0 && passCount > 0) {
     console.log("  🎉 ALL COMPARED TESTS PASSED!");
-    console.log("  TypeScript and Solidity hash functions are in PERFECT PARITY.");
+    console.log(
+      "  TypeScript and Solidity hash functions are in PERFECT PARITY."
+    );
   } else if (failCount > 0) {
     console.log("  ⚠️  PARITY FAILED - check for differences above.");
     process.exit(1);
   } else if (skipCount === testSeeds.length) {
     console.log("  ℹ️  No Solidity comparison available.");
-    console.log("     Add test_HashParityOutput to MapGenerator.t.sol for full parity testing.");
+    console.log(
+      "     Add test_HashParityOutput to MapGenerator.t.sol for full parity testing."
+    );
   }
 
   console.log("═".repeat(70));
@@ -363,4 +388,3 @@ function main() {
 }
 
 main();
-

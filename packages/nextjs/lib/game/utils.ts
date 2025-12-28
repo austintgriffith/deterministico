@@ -444,7 +444,7 @@ export function terrainHash(terrain: TerrainType[][]): `0x${string}` {
 
 /**
  * Generate map and return hash (convenience function)
- * Matches Solidity MapGeneratorWrapper.generateMapHash()
+ * Matches Solidity MapGenerator.generateMapHash()
  *
  * @param roll The bytes32 roll hash
  * @param gridSize Size of the grid to generate

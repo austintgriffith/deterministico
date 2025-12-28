@@ -17,7 +17,8 @@ import "./MapGenerator.sol";
  *      We use nibble-packing for a good balance of gas efficiency and code simplicity.
  */
 contract GameMap {
-    using MapGenerator for bytes32;
+    /// @notice Reference to the MapGenerator contract
+    MapGenerator public immutable mapGenerator;
 
     /// @notice Game state
     struct Game {
@@ -44,6 +45,14 @@ contract GameMap {
     error CoordinatesOutOfBounds(uint256 row, uint256 col, uint256 gridSize);
 
     /**
+     * @notice Constructor
+     * @param _mapGenerator Address of the MapGenerator contract
+     */
+    constructor(MapGenerator _mapGenerator) {
+        mapGenerator = _mapGenerator;
+    }
+
+    /**
      * @notice Generate and store a map from a roll hash
      * @param roll The bytes32 roll hash to generate the map from
      * @param gridSize Size of the grid to generate
@@ -53,8 +62,8 @@ contract GameMap {
 
         uint256 startGas = gasleft();
 
-        // Generate the map in memory
-        MapGenerator.TerrainType[][] memory terrain = MapGenerator.generateMap(roll, gridSize);
+        // Generate the map in memory using external call
+        MapGenerator.TerrainType[][] memory terrain = mapGenerator.generateMap(roll, gridSize);
 
         // Store packed terrain data
         _storePackedTerrain(terrain, gridSize);
@@ -242,6 +251,9 @@ contract GameMap {
  * @dev Allows creating multiple game instances
  */
 contract GameMapFactory {
+    /// @notice Shared MapGenerator contract
+    MapGenerator public immutable mapGenerator;
+
     /// @notice All created games
     GameMap[] public games;
 
@@ -249,12 +261,20 @@ contract GameMapFactory {
     event GameCreated(address indexed gameAddress, uint256 indexed gameId);
 
     /**
+     * @notice Constructor
+     * @param _mapGenerator Address of the MapGenerator contract
+     */
+    constructor(MapGenerator _mapGenerator) {
+        mapGenerator = _mapGenerator;
+    }
+
+    /**
      * @notice Create a new game map
      * @return gameId The ID of the new game
      * @return gameAddress The address of the new GameMap contract
      */
     function createGame() external returns (uint256 gameId, address gameAddress) {
-        GameMap newGame = new GameMap();
+        GameMap newGame = new GameMap(mapGenerator);
         gameId = games.length;
         games.push(newGame);
         gameAddress = address(newGame);
@@ -268,4 +288,3 @@ contract GameMapFactory {
         return games.length;
     }
 }
-

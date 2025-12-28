@@ -6,12 +6,14 @@ import "../contracts/GameMap.sol";
 import "../contracts/MapGenerator.sol";
 
 contract GameMapTest is Test {
+    MapGenerator public mapGenerator;
     GameMap public gameMap;
     GameMapFactory public factory;
 
     function setUp() public {
-        gameMap = new GameMap();
-        factory = new GameMapFactory();
+        mapGenerator = new MapGenerator();
+        gameMap = new GameMap(mapGenerator);
+        factory = new GameMapFactory(mapGenerator);
     }
 
     // =========================================================================
@@ -145,8 +147,8 @@ contract GameMapTest is Test {
         bytes32 roll = keccak256("test_correctness");
         uint256 gridSize = 11;
         
-        // Generate expected map
-        MapGenerator.TerrainType[][] memory expected = MapGenerator.generateMap(roll, gridSize);
+        // Generate expected map using MapGenerator contract
+        MapGenerator.TerrainType[][] memory expected = mapGenerator.generateMap(roll, gridSize);
         
         // Store map
         gameMap.generateAndStoreMap(roll, gridSize);
@@ -166,7 +168,7 @@ contract GameMapTest is Test {
         uint256 gridSize = 21;
         
         // Generate and store map
-        MapGenerator.TerrainType[][] memory terrain = MapGenerator.generateMap(roll, gridSize);
+        MapGenerator.TerrainType[][] memory terrain = mapGenerator.generateMap(roll, gridSize);
         gameMap.generateAndStoreMap(roll, gridSize);
         
         // Check several positions
@@ -264,4 +266,3 @@ contract GameMapTest is Test {
         }
     }
 }
-
